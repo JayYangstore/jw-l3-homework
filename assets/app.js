@@ -141,32 +141,44 @@ function flatten(topic){
 /* ---------- 渲染：起始页 ---------- */
 function renderHome(){
   mode = 'view';
+  // 首页不显示进度条和返回按钮
+  const tp = document.getElementById('topprog'); if(tp) tp.style.display='none';
+  const pt = document.getElementById('progtxt'); if(pt) pt.textContent='';
+  const bb = document.getElementById('backbtn'); if(bb) bb.style.display='none';
   $('#screen').innerHTML = `
     <div class="hero">
       <h2>家卫老师小学数学 L3 · 在线作业</h2>
       <div class="sub">${DATA.topics.length} 个专题 · ${DATA.stats.totalQuestions} 道题 · 不用打印，做完自动判分</div>
 
-      <div class="howto">
-        <h4>📌 怎么用</h4>
+      <details class="howto" id="howtoBox" ${localStorage.getItem('jw_l3_seen')?'':'open'}>
+        <summary>📌 怎么用（第一次请展开看）</summary>
         <ol>
           <li>选一个专题 → 点「开始做」</li>
-          <li>每题下面有一块<b>手写板</b>：iPad 用 Apple Pencil（手指也行）写推导过程</li>
-          <li>写完在<b>答案框</b>填数字 → 系统<b>自动判分</b>，对错立刻显示</li>
+          <li>在每题的<b>手写板</b>写推导过程（iPad 用 Apple Pencil，手指也行）</li>
+          <li>在<b>答案框</b>填最终答案 → 系统<b>立即判分</b>，对错马上显示</li>
+          <li>多空题按题目里空格的顺序填，比如「长13厘米,宽7厘米」就填 13 和 7</li>
           <li>进度自动保存，下次接着做</li>
         </ol>
-      </div>
+      </details>
 
       <div class="stats">
         <div class="stat"><b>${DATA.stats.totalQuestions}</b><span>总题数</span></div>
         <div class="stat"><b>${DATA.topics.length}</b><span>专题</span></div>
-        <div class="stat"><b>${DATA.stats.multiBlank}</b><span>多空题</span></div>
-        <div class="stat"><b>${DATA.stats.totalSteps}</b><span>台阶</span></div>
+        <div class="stat"><b>${DATA.stats.multiBlank}</b><span>题含多空</span></div>
+        <div class="stat"><b>${DATA.stats.totalSteps}</b><span>个学习台阶</span></div>
       </div>
 
       <input class="tsrch" id="tsearch" placeholder="🔍 搜索专题名..." oninput="filterTopics(this.value)">
       <div class="tgrid" id="tgrid"></div>
     </div>`;
   renderTopicCards('');
+  // 第一次看过说明后自动折叠
+  const box = document.getElementById('howtoBox');
+  if(box){
+    box.addEventListener('toggle', ()=>{
+      if(!box.open) localStorage.setItem('jw_l3_seen','1');
+    });
+  }
 }
 
 function filterTopics(q){
@@ -187,7 +199,8 @@ function renderTopicCards(kw){
     return `<button class="tcard ${done?'done':''}" onclick="openTopic('${t.id}')">
       ${done && pct>0 ? `<span class="pg">${Math.round(pct)}%</span>` : ''}
       <div class="nm">${esc(t.name)}</div>
-      <div class="mt">${t.stats.questions} 题 · ${t.stats.steps} 台阶 · ${t.stats.groups} 组</div>
+      <div class="mt">${t.stats.questions} 题 · ${t.stats.steps} 个台阶 · ${t.stats.groups} 组</div>
+      <div class="go">开始做 →</div>
     </button>`;
   }).join('') || '<div style="grid-column:1/-1;text-align:center;color:#94a3b8;padding:30px">没有匹配的专题</div>';
 }
@@ -214,6 +227,8 @@ function openTopic(id){
 }
 
 function renderPractice(){
+  const tp = document.getElementById('topprog'); if(tp) tp.style.display='';
+  const bb = document.getElementById('backbtn'); if(bb) bb.style.display='';
   const t = curTopic;
   const cur = flat[curQIdx];
   const answered = flat.filter(f => {
