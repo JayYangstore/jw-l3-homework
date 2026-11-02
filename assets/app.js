@@ -69,10 +69,47 @@ function judge(q, userInputs){
 /* ---------- 存储 ---------- */
 function saveState(){
   try{
-    localStorage.setItem(LS_KEY, JSON.stringify({
-      topic: curTopic, idx: curQIdx, answers, strokes, mode
-    }));
-  }catch(e){}
+    const payload = JSON.stringify({topic: curTopic, idx: curQIdx, answers, strokes, mode});
+    // localStorage 配额保护：笔迹太大会爆（板栗作业踩过这个坑）
+    if(payload.length > 3.5 * 1024 * 1024){
+      // 按题号倒序丢弃最旧的笔迹，保留答案
+      const keys = Object.keys(strokes).sort((a,b)=>{
+        const na = parseInt((a.match(/\|(\d+)$/)||[])[1]||0);
+        const nb = parseInt((b.match(/\|(\d+)$/)||[])[1]||0);
+        return nb - na;
+      });
+      let dropped = 0;
+      for(const k of keys){
+        if(payload.length <= 3.0 * 1024 * 1024) break;
+        delete strokes[k]; dropped++;
+      }
+      if(dropped) toast(`空间不足，已丢弃 ${dropped} 题的笔迹（答案都保留）`);
+      localStorage.setItem(LS_KEY, JSON.stringify({
+        topic: curTopic, idx: curQIdx, answers, strokes, mode
+      }));
+      return;
+    }
+    localStorage.setItem(LS_KEY, payload);
+  }catch(e){
+    toast('保存失败：浏览器存储空间不足');
+  }
+}
+
+/** 轻提示 */
+function toast(msg){
+  let t = document.getElementById('__toast');
+  if(!t){
+    t = document.createElement('div');
+    t.id = '__toast';
+    t.style.cssText = 'position:fixed;left:50%;bottom:24px;transform:translateX(-50%);'
+      + 'background:#1e293b;color:#fff;padding:11px 20px;border-radius:11px;'
+      + 'font-size:13.5px;z-index:999;box-shadow:0 4px 16px rgba(0,0,0,.22);max-width:88vw;text-align:center';
+    document.body.appendChild(t);
+  }
+  t.textContent = msg;
+  t.style.opacity = '1';
+  clearTimeout(t.__timer);
+  t.__timer = setTimeout(()=>{ t.style.opacity='0'; t.style.transition='opacity .3s'; }, 3200);
 }
 function loadState(){
   try{
@@ -308,6 +345,8 @@ function initPad(f, i){
 
   padState[i] = {color:'#1e293b', drawing:false, last:null, w:0, h:0};
   resize();
+  padState[i].w = wrap.clientWidth;
+  padState[i].h = parseInt(cv.style.height) || 150;
   window.addEventListener('resize', () => {
     const c2 = document.getElementById('pad-'+i);
     if(c2 && padState[i]){ const w=c2.clientWidth; const h=Math.max(150,Math.min(320,Math.round(w*0.42)));
@@ -392,8 +431,12 @@ function undoStroke(i){
   if(arr.length===0) wrap?.classList.remove('has');
   const st = padState[i];
   const ctx = cv.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  ctx.save();
+  ctx.setTransform(1,0,0,1,0,0);
   ctx.clearRect(0,0,cv.width,cv.height);
-  redraw(i, ctx, st.w||cv.clientWidth, st.h||cv.clientHeight);
+  ctx.restore();
+  redraw(i, ctx, st.w || cv.clientWidth, st.h || cv.clientHeight);
   saveState();
 }
 
@@ -402,7 +445,10 @@ function clearPad(i){
   strokes[f.key] = [];
   const cv = document.getElementById('pad-'+i);
   const ctx = cv.getContext('2d');
+  ctx.save();
+  ctx.setTransform(1,0,0,1,0,0);
   ctx.clearRect(0,0,cv.width,cv.height);
+  ctx.restore();
   document.getElementById('padwrap-'+i)?.classList.remove('has');
   saveState();
 }
