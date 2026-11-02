@@ -150,8 +150,8 @@ function renderHome(){
       <h2>家卫老师小学数学 L3 · 在线作业</h2>
       <div class="sub">${DATA.topics.length} 个专题 · ${DATA.stats.totalQuestions} 道题 · 不用打印，做完自动判分</div>
 
-      <details class="howto" id="howtoBox" ${localStorage.getItem('jw_l3_seen')?'':'open'}>
-        <summary>📌 怎么用（第一次请展开看）</summary>
+      <details class="howto" id="howtoBox">
+        <summary>📌 第一次用？点这里看操作说明</summary>
         <ol>
           <li>选一个专题 → 点「开始做」</li>
           <li>在每题的<b>手写板</b>写推导过程（iPad 用 Apple Pencil，手指也行）</li>
@@ -161,24 +161,20 @@ function renderHome(){
         </ol>
       </details>
 
-      <div class="stats">
-        <div class="stat"><b>${DATA.stats.totalQuestions}</b><span>总题数</span></div>
-        <div class="stat"><b>${DATA.topics.length}</b><span>专题</span></div>
-        <div class="stat"><b>${DATA.stats.multiBlank}</b><span>题含多空</span></div>
-        <div class="stat"><b>${DATA.stats.totalSteps}</b><span>个学习台阶</span></div>
+      <div class="pills">
+        <span class="pill">${DATA.stats.totalQuestions} 道题</span>
+        <span class="pill">${DATA.topics.length} 个专题</span>
+        <span class="pill">${DATA.stats.multiBlank} 道多空题</span>
+        <span class="pill">${DATA.stats.totalSteps} 个台阶</span>
       </div>
 
-      <input class="tsrch" id="tsearch" placeholder="🔍 搜索专题名..." oninput="filterTopics(this.value)">
+      <div class="listhead">
+        <span>📚 选择专题</span>
+        <input class="tsrch" id="tsearch" placeholder="🔍 搜索..." oninput="filterTopics(this.value)">
+      </div>
       <div class="tgrid" id="tgrid"></div>
     </div>`;
   renderTopicCards('');
-  // 第一次看过说明后自动折叠
-  const box = document.getElementById('howtoBox');
-  if(box){
-    box.addEventListener('toggle', ()=>{
-      if(!box.open) localStorage.setItem('jw_l3_seen','1');
-    });
-  }
 }
 
 function filterTopics(q){
