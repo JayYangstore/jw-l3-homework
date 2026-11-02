@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>家卫老师 L3 作业在线</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+
+<div class="topbar">
+  <div class="in">
+    <h1>📐 家卫老师 L3 作业</h1>
+    <div class="prog"><i id="progfill"></i></div>
+    <span id="progtxt" style="font-size:12.5px;opacity:.9;min-width:44px;text-align:right">0/0</span>
+    <button class="tbtn" onclick="backHome()">目录</button>
+  </div>
+</div>
+
+<div class="wrap">
+  <div id="screen"></div>
+</div>
+
+<script src="assets/data.js"></script>
+<script src="assets/app.js"></script>
+<script>
+(function(){
+  if(typeof DATA_RAW !== 'undefined'){
+    // 统计
+    let total=0, multi=0, steps=0;
+    DATA_RAW.topics.forEach(t=>{
+      total += t.stats.questions;
+      steps += t.stats.steps;
+      t.steps.forEach(s=>s.groups.forEach(g=>g.questions.forEach(q=>{
+        if((q.blanks||[]).length > 1) multi++;
+      })));
+    });
+    DATA_RAW.stats = {totalQuestions: total, multiBlank: multi, totalSteps: steps};
+    DATA = DATA_RAW;
+  }
+  renderHome();
+})();
+</script>
+</body>
+</html>
