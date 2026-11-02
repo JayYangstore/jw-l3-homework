@@ -112,8 +112,12 @@ body{
 
 /* 手写画布 */
 .paper{margin-bottom:11px}
-.paper .lbl{display:flex;justify-content:space-between;align-items:center;
-  font-size:12.5px;color:var(--gray);margin-bottom:5px}
+.paper .lbl{display:flex;align-items:center;gap:9px;flex-wrap:wrap;
+  font-size:12.5px;color:var(--gray);margin-bottom:6px}
+.paper .lbl>span{flex:1;min-width:140px}
+.paper .lbl .fold{background:#f1f5f9;border:1px solid var(--border);border-radius:7px;
+  padding:4px 11px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;
+  color:#475569;flex-shrink:0}
 .paper .lbl b{color:#475569;font-size:13px}
 .paper .lbl span b{color:#b45309}
 .pad{position:relative;border:1.5px dashed #cbd5e1;border-radius:10px;background:#fff;
@@ -139,8 +143,10 @@ body{
 .answers .ttl-hint{font-weight:500;color:#94a3b8;font-size:11.5px}
 
 /* 判分状态行：直接在题目处显示，不用弹窗 */
-.verdict{margin-top:11px;padding:9px 12px;border-radius:9px;font-size:13.5px;
-  font-weight:700;line-height:1.7}
+.verdict{margin-top:11px;padding:11px 13px;border-radius:10px;font-size:14.5px;
+  font-weight:800;line-height:1.7;letter-spacing:.2px}
+.v-ok{font-size:15.5px}
+.v-no{font-size:15.5px}
 .v-idle{display:block;color:#94a3b8;background:#f8fafc;font-weight:500;
   border:1px dashed #cbd5e1}
 .v-ok{display:block;color:#15803d;background:#dcfce7;border:1px solid #86efac}
