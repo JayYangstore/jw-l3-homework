@@ -38,9 +38,9 @@ body{
 .wrap{max-width:900px;margin:0 auto;padding:14px 14px 90px}
 
 /* ---------- 起始页 ---------- */
-.hero{background:#fff;border-radius:16px;padding:24px 20px;box-shadow:0 2px 12px rgba(0,0,0,.06)}
-.hero h2{font-size:21px;color:var(--blue-d);margin-bottom:5px}
-.hero .sub{color:var(--gray);font-size:13.5px;margin-bottom:18px}
+.hero{background:#fff;border-radius:16px;padding:20px 18px;box-shadow:0 2px 12px rgba(0,0,0,.06)}
+.hero h2{font-size:20px;color:var(--blue-d);margin-bottom:4px}
+.hero .sub{color:var(--gray);font-size:13px;margin-bottom:13px}
 .howto{background:#eff6ff;border-left:4px solid var(--blue);padding:11px 15px;
   border-radius:0 9px 9px 0;margin-bottom:14px;font-size:13.5px}
 .howto summary{font-size:14px;font-weight:700;color:var(--blue-d);cursor:pointer;
@@ -52,6 +52,12 @@ body{
 .howto ol{margin-left:19px;margin-top:5px}
 .howto li{margin-bottom:4px}
 .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;margin-bottom:18px}
+.pills{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px}
+.pill{background:#e0e7ff;color:#3730a3;font-size:12.5px;font-weight:600;
+  padding:5px 11px;border-radius:14px}
+.listhead{display:flex;align-items:center;gap:10px;margin-bottom:11px;flex-wrap:wrap}
+.listhead>span{font-size:16px;font-weight:700;color:#1e40af}
+.listhead .tsrch{flex:1;min-width:140px;margin-bottom:0}
 @media(max-width:560px){.stats{grid-template-columns:repeat(2,1fr)}}
 .stat{background:#f8fafc;border:1px solid var(--border);border-radius:11px;padding:11px 13px;text-align:center}
 .stat b{display:block;font-size:22px;color:var(--blue);line-height:1.25}
@@ -70,7 +76,8 @@ body{
 .tcard .pg{position:absolute;top:11px;right:12px;font-size:11px;font-weight:700;
   color:var(--green);background:#dcfce7;padding:2px 8px;border-radius:10px}
 .tcard .go{margin-top:9px;display:inline-block;background:var(--blue);color:#fff;
-  font-size:13px;font-weight:700;padding:6px 15px;border-radius:8px}
+  font-size:13.5px;font-weight:700;padding:9px 18px;border-radius:9px;min-height:38px;
+  display:inline-flex;align-items:center}
 .tcard.done .go{background:var(--green)}
 .tsrch{width:100%;padding:11px 14px;border:1px solid var(--border);border-radius:11px;
   font-size:14.5px;font-family:inherit;margin-bottom:13px;background:#fff}
