@@ -41,9 +41,14 @@ body{
 .hero{background:#fff;border-radius:16px;padding:24px 20px;box-shadow:0 2px 12px rgba(0,0,0,.06)}
 .hero h2{font-size:21px;color:var(--blue-d);margin-bottom:5px}
 .hero .sub{color:var(--gray);font-size:13.5px;margin-bottom:18px}
-.howto{background:#eff6ff;border-left:4px solid var(--blue);padding:13px 15px;
-  border-radius:0 9px 9px 0;margin-bottom:18px;font-size:13.5px}
-.howto h4{font-size:14.5px;margin-bottom:6px}
+.howto{background:#eff6ff;border-left:4px solid var(--blue);padding:11px 15px;
+  border-radius:0 9px 9px 0;margin-bottom:14px;font-size:13.5px}
+.howto summary{font-size:14px;font-weight:700;color:var(--blue-d);cursor:pointer;
+  list-style:none;display:flex;align-items:center;gap:6px}
+.howto summary::-webkit-details-marker{display:none}
+.howto summary::after{content:"▾";color:#93c5fd;font-size:12px;transition:transform .2s}
+.howto[open] summary::after{transform:rotate(180deg)}
+.howto[open] summary{margin-bottom:6px}
 .howto ol{margin-left:19px;margin-top:5px}
 .howto li{margin-bottom:4px}
 .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;margin-bottom:18px}
@@ -64,6 +69,9 @@ body{
 .tcard .mt{font-size:12px;color:var(--gray)}
 .tcard .pg{position:absolute;top:11px;right:12px;font-size:11px;font-weight:700;
   color:var(--green);background:#dcfce7;padding:2px 8px;border-radius:10px}
+.tcard .go{margin-top:9px;display:inline-block;background:var(--blue);color:#fff;
+  font-size:13px;font-weight:700;padding:6px 15px;border-radius:8px}
+.tcard.done .go{background:var(--green)}
 .tsrch{width:100%;padding:11px 14px;border:1px solid var(--border);border-radius:11px;
   font-size:14.5px;font-family:inherit;margin-bottom:13px;background:#fff}
 
