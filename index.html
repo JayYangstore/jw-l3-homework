@@ -40,6 +40,9 @@
     DATA = DATA_RAW;
   }
   renderHome();
+  // 支持 ?t=<topicId> 直接进入某专题（从家卫老师目录表跳转）
+  const t = new URLSearchParams(location.search).get('t');
+  if(t && DATA && DATA.topics.some(x=>x.id===t)) openTopic(t);
 })();
 </script>
 </body>
