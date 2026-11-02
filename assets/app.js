@@ -264,6 +264,34 @@ function renderPractice(){
   updateProgress();
 }
 
+/** 判分状态行：不用弹窗，直接在题目处显示 */
+function verdictHTML(j, blanks, ans){
+  if(!j) return `<span class="v-idle">填完答案，这里会立刻告诉你对不对</span>`;
+  const filled = ans.map((v,i)=>String(v||'').trim()!=='');
+  if(!filled.some(Boolean))
+    return `<span class="v-idle">填完答案，这里会立刻告诉你对不对</span>`;
+
+  const right = j.perBlank.every(Boolean);
+  const allFilled = j.perBlank.length === filled.filter(Boolean).length;
+
+  if(right){
+    return `<span class="v-ok">✓ 答对了！${blanks.length>1?` ${blanks.length} 个空全对`:''}</span>`;
+  }
+  if(!allFilled){
+    const miss = j.perBlank.map((ok,k)=>ok?null:k).filter(x=>x!==null);
+    return `<span class="v-wait">还差 ${miss.length} 个空没填（${miss.map(k=>`第${k+1}空`).join('、')}）</span>`;
+  }
+  // 答错：逐空说明
+  const detail = blanks.map((b,k)=>{
+    const ok = j.perBlank[k];
+    const mine = String(ans[k]||'').trim() || '（空）';
+    return ok
+      ? `<span class="v-item ok">第${k+1}空 ✓ ${esc(b.value)}${esc(b.unit||'')}</span>`
+      : `<span class="v-item no">第${k+1}空 ✗ 你写「${esc(mine)}」· 正确「${esc(b.value)}${esc(b.unit||'')}」</span>`;
+  }).join('');
+  return `<span class="v-no">✗ 还不对</span><div class="v-detail">${detail}</div>`;
+}
+
 function renderCard(f, i){
   const q = f.q;
   const cur = i === curQIdx;
@@ -276,8 +304,10 @@ function renderCard(f, i){
     ansHTML = `<div class="special">📷 这题是「涂色/看图」题，答案在图上。<br>
       <span style="font-size:12.5px">请对照老师发的原 PDF 完成，做完点下一题。</span></div>`;
   }else{
+    const anyFilled = ans.some(v=>String(v||'').trim()!=='');
     ansHTML = `<div class="answers">
-      <div class="ttl">✏️ 填写答案${blanks.length>1?`（本题 ${blanks.length} 个空）`:''}</div>
+      <div class="ttl">✏️ 填写答案${blanks.length>1?`（本题 ${blanks.length} 个空，按顺序填）`:''}
+        <span class="ttl-hint">👆 判分只看这里，填完立刻出结果</span></div>
       ${blanks.map((b,k)=>{
         const v = ans[k] || '';
         let cls = '', st = '';
@@ -294,6 +324,7 @@ function renderCard(f, i){
           ${st}
         </div>`;
       }).join('')}
+      <div class="verdict" id="vd-${i}">${verdictHTML(j, blanks, ans)}</div>
     </div>`;
   }
 
@@ -304,8 +335,8 @@ function renderCard(f, i){
     <div class="qtext">${formatQ(q.text)}</div>
     <div class="paper">
       <div class="lbl">
-        <b>✍️ 写过程（手写板）</b>
-        <span>虚线框内书写 · 下方可切换颜色、撤销</span>
+        <b>✍️ 草稿区 · 写推导过程</b>
+        <span>只用来打草稿，<b>不对这里判分</b> · 判分看下面的答案框</span>
       </div>
       <div class="pad" id="padwrap-${i}">
         <canvas id="pad-${i}"></canvas>
@@ -319,10 +350,11 @@ function renderCard(f, i){
         </div>
         <button onclick="undoStroke(${i})">↩ 撤销</button>
         <button class="clr" onclick="clearPad(${i})">✕ 清空</button>
-        ${q.answer!==undefined && j && !j.correct ? `<button onclick="showAns('${f.key}')">💡 看答案</button>`:''}
+        ${q.answer!==undefined ? `<button onclick="showAns('${f.key}')">💡 展开答案</button>`:''}
       </div>
     </div>
     ${ansHTML}
+    <div class="reveal" id="reveal-${i}" style="display:none"></div>
   </div>`;
 }
 
@@ -469,21 +501,28 @@ function onAns(key, k, val){
   answers[key] = answers[key] || [];
   answers[key][k] = val;
   saveState();
-  // 局部刷新该题卡片
+  // 局部刷新该题卡片（不整页重绘，避免打断输入）
   const i = flat.findIndex(f => f.key === key);
   if(i < 0) return;
   const card = document.getElementById('card-'+i);
   if(!card) return;
   const f = flat[i];
-  const j = judge(f.q, answers[key]);
   const blanks = f.q.blanks || [];
-  card.querySelectorAll('.abl input')[k].className =
-    String(val).trim()==='' ? '' : (j.perBlank[k] ? 'ok' : 'no');
+  const j = judge(f.q, answers[key]);
+
+  // 更新这个输入框的样式
+  const inp = card.querySelectorAll('.abl input')[k];
+  if(inp) inp.className = String(val).trim()==='' ? '' : (j.perBlank[k] ? 'ok' : 'no');
   const stEl = card.querySelectorAll('.abl .s')[k];
   if(stEl){ stEl.textContent = j.perBlank[k] ? '✓' : '✗';
     stEl.className = 's ' + (j.perBlank[k]?'ok':'no'); }
+
+  // ★ 刷新题目处的判分状态行（不用弹窗）
+  const vd = document.getElementById('vd-'+i);
+  if(vd) vd.innerHTML = verdictHTML(j, blanks, answers[key]);
+
   card.classList.toggle('answered', j.correct);
-  card.classList.toggle('wrong', !j.correct && String(val).trim()!=='');
+  card.classList.toggle('wrong', !j.correct && answers[key].some(v=>String(v||'').trim()!==''));
   updateProgress();
 }
 
@@ -517,10 +556,16 @@ function updateProgress(){
 }
 
 function showAns(key){
+  // 不弹窗，直接在题目下方展开答案
   const f = flat.find(x=>x.key===key);
   if(!f) return;
-  const b = (f.q.blanks||[]).map(x=>x.value + (x.unit||'')).join(' , ');
-  alert(`参考答案：${b}`);
+  const i = flat.indexOf(f);
+  const box = document.getElementById('reveal-'+i);
+  if(!box) return;
+  if(box.style.display === 'block'){ box.style.display = 'none'; return; }
+  const b = (f.q.blanks||[]).map(x=>(x.label?x.label+' ':'')+x.value + (x.unit||'')).join('　·　');
+  box.innerHTML = `<b>参考答案：</b>${esc(b)}`;
+  box.style.display = 'block';
 }
 
 function confirmReset(){
