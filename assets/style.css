@@ -115,6 +115,7 @@ body{
 .paper .lbl{display:flex;justify-content:space-between;align-items:center;
   font-size:12.5px;color:var(--gray);margin-bottom:5px}
 .paper .lbl b{color:#475569;font-size:13px}
+.paper .lbl span b{color:#b45309}
 .pad{position:relative;border:1.5px dashed #cbd5e1;border-radius:10px;background:#fff;
   overflow:hidden;touch-action:none}
 .pad canvas{display:block;width:100%;height:auto;touch-action:none;cursor:crosshair}
@@ -133,7 +134,28 @@ body{
 
 /* 答案输入 */
 .answers{background:#f8fafc;border:1px solid var(--border);border-radius:10px;padding:12px 13px}
-.answers .ttl{font-size:12.5px;color:var(--gray);margin-bottom:9px;font-weight:600}
+.answers .ttl{font-size:12.5px;color:var(--gray);margin-bottom:9px;font-weight:600;
+  display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.answers .ttl-hint{font-weight:500;color:#94a3b8;font-size:11.5px}
+
+/* 判分状态行：直接在题目处显示，不用弹窗 */
+.verdict{margin-top:11px;padding:9px 12px;border-radius:9px;font-size:13.5px;
+  font-weight:700;line-height:1.7}
+.v-idle{display:block;color:#94a3b8;background:#f8fafc;font-weight:500;
+  border:1px dashed #cbd5e1}
+.v-ok{display:block;color:#15803d;background:#dcfce7;border:1px solid #86efac}
+.v-no{display:block;color:#b91c1c;background:#fee2e2;border:1px solid #fca5a5}
+.v-wait{display:block;color:#b45309;background:#fef3c7;border:1px solid #fcd34d}
+.v-detail{margin-top:6px;font-weight:500;display:flex;flex-wrap:wrap;gap:6px}
+.v-item{font-size:12.5px;padding:3px 9px;border-radius:7px;background:#fff;
+  border:1px solid #e2e8f0;color:#475569}
+.v-item.ok{color:#15803d;border-color:#86efac}
+.v-item.no{color:#b91c1c;border-color:#fca5a5}
+
+/* inline 展开的答案 */
+.reveal{margin-top:9px;padding:11px 14px;border-radius:9px;background:#fef3c7;
+  border:1px solid #fcd34d;font-size:14px;color:#92400e;line-height:1.75}
+.reveal b{color:#78350f}
 .abl{display:flex;align-items:center;gap:9px;margin-bottom:9px;flex-wrap:wrap}
 .abl:last-child{margin-bottom:0}
 .abl .lbl{font-size:13.5px;color:#475569;min-width:52px;font-weight:600}
