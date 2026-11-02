@@ -15,6 +15,7 @@ body{
   -webkit-tap-highlight-color:transparent;overscroll-behavior-y:none;
 }
 .hide{display:none!important}
+#__toast{opacity:0;transition:opacity .3s}
 
 /* ---------- 顶栏 ---------- */
 .topbar{
