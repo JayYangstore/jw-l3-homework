@@ -556,5 +556,7 @@ function redoTopic(){
 
 function backHome(){
   saveState();
+  // 清掉 ?t= 参数，避免刷新又跳回专题
+  try{ history.replaceState(null,'',location.pathname); }catch(e){}
   renderHome();
 }
