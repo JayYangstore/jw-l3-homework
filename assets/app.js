@@ -67,31 +67,76 @@ function judge(q, userInputs){
 }
 
 /* ---------- 存储 ---------- */
+/* ============================================================
+   存储：答案/进度 → localStorage（轻量）
+        笔迹       → IndexedDB（配额大，几十~几百MB）
+   ⚠️ 实测本机 localStorage 已被其它应用占满 5112KB（可写 0MB），
+      所以笔迹绝不能放 localStorage。
+   ============================================================ */
+const DB_NAME = 'jw_l3_strokes';
+const DB_STORE = 'strokes';
+let _db = null;
+
+function openDB(){
+  if(_db) return Promise.resolve(_db);
+  return new Promise((resolve, reject)=>{
+    if(!window.indexedDB){ reject(new Error('no indexedDB')); return; }
+    const req = indexedDB.open(DB_NAME, 1);
+    req.onupgradeneeded = e => {
+      const db = e.target.result;
+      if(!db.objectStoreNames.contains(DB_STORE))
+        db.createObjectStore(DB_STORE, {keyPath:'key'});
+    };
+    req.onsuccess = e => { _db = e.target.result; resolve(_db); };
+    req.onerror = e => reject(e.target.error);
+  });
+}
+
+function idbSet(key, val){
+  return openDB().then(db => new Promise((resolve, reject)=>{
+    const tx = db.transaction(DB_STORE, 'readwrite');
+    tx.objectStore(DB_STORE).put({key, val});
+    tx.oncomplete = () => resolve(true);
+    tx.onerror = e => reject(e.target.error);
+  })).catch(()=>false);
+}
+
+function idbGet(key){
+  return openDB().then(db => new Promise((resolve, reject)=>{
+    const tx = db.transaction(DB_STORE, 'readonly');
+    const r = tx.objectStore(DB_STORE).get(key);
+    r.onsuccess = () => resolve(r.result ? r.result.val : null);
+    r.onerror = e => reject(e.target.error);
+  })).catch(()=>null);
+}
+
+function idbClear(){
+  return openDB().then(db => new Promise(resolve=>{
+    const tx = db.transaction(DB_STORE, 'readwrite');
+    tx.objectStore(DB_STORE).clear();
+    tx.oncomplete = () => resolve(true);
+    tx.onerror = () => resolve(false);
+  })).catch(()=>false);
+}
+
+let _strokesDirty = false;
 function saveState(){
+  // ① 轻量状态 → localStorage（答案 + 进度，不含笔迹）
   try{
-    const payload = JSON.stringify({topic: curTopic, idx: curQIdx, answers, strokes, mode});
-    // localStorage 配额保护：笔迹太大会爆（板栗作业踩过这个坑）
-    if(payload.length > 3.5 * 1024 * 1024){
-      // 按题号倒序丢弃最旧的笔迹，保留答案
-      const keys = Object.keys(strokes).sort((a,b)=>{
-        const na = parseInt((a.match(/\|(\d+)$/)||[])[1]||0);
-        const nb = parseInt((b.match(/\|(\d+)$/)||[])[1]||0);
-        return nb - na;
-      });
-      let dropped = 0;
-      for(const k of keys){
-        if(payload.length <= 3.0 * 1024 * 1024) break;
-        delete strokes[k]; dropped++;
-      }
-      if(dropped) toast(`空间不足，已丢弃 ${dropped} 题的笔迹（答案都保留）`);
-      localStorage.setItem(LS_KEY, JSON.stringify({
-        topic: curTopic, idx: curQIdx, answers, strokes, mode
-      }));
-      return;
-    }
-    localStorage.setItem(LS_KEY, payload);
+    localStorage.setItem(LS_KEY, JSON.stringify({
+      topic: curTopic, idx: curQIdx, answers, mode, ts: Date.now()
+    }));
   }catch(e){
-    toast('保存失败：浏览器存储空间不足');
+    // localStorage 满了 → 答案也存不下，只能提示
+    if(!window.__lsWarned){ window.__lsWarned = 1; toast('浏览器存储已满，进度可能无法保存'); }
+  }
+  // ② 笔迹 → IndexedDB（延迟合并写）
+  if(_strokesDirty){
+    _strokesDirty = false;
+    idbSet('strokes', strokes).then(ok=>{
+      if(!ok && !window.__idbWarned){ window.__idbWarned = 1;
+        toast('笔迹保存失败（刷新会丢失草稿）'); }
+    });
   }
 }
 
@@ -101,7 +146,7 @@ function toast(msg){
   if(!t){
     t = document.createElement('div');
     t.id = '__toast';
-    t.style.cssText = 'position:fixed;left:50%;bottom:24px;transform:translateX(-50%);'
+    t.style.cssText = 'position:fixed;left:50%;top:64px;transform:translateX(-50%);'
       + 'background:#1e293b;color:#fff;padding:11px 20px;border-radius:11px;'
       + 'font-size:13.5px;z-index:999;box-shadow:0 4px 16px rgba(0,0,0,.22);max-width:88vw;text-align:center';
     document.body.appendChild(t);
@@ -119,6 +164,14 @@ function loadState(){
 }
 function clearState(){
   try{ localStorage.removeItem(LS_KEY); }catch(e){}
+  idbClear();
+}
+/** 从 IndexedDB 恢复笔迹（异步） */
+function restoreStrokes(){
+  return idbGet('strokes').then(v=>{
+    if(v && typeof v === 'object'){ strokes = v; return true; }
+    return false;
+  }).catch(()=>false);
 }
 
 /* ---------- 题目扁平化 ---------- */
@@ -211,7 +264,7 @@ function openTopic(id){
   const st = loadState();
   if(st && st.topic === id){
     answers = st.answers || {};
-    strokes = st.strokes || {};
+    strokes = {};
     curQIdx = st.idx || 0;
   }else{
     answers = {}; strokes = {}; curQIdx = 0;
@@ -220,6 +273,10 @@ function openTopic(id){
   t0 = Date.now();
   renderPractice();
   saveState();
+  // 从 IndexedDB 恢复笔迹（异步）
+  restoreStrokes().then(ok=>{
+    if(ok){ renderPractice(); }   // 重绘带笔迹的卡片
+  });
 }
 
 function renderPractice(){
@@ -337,7 +394,9 @@ function renderCard(f, i){
       <div class="lbl">
         <b>✍️ 草稿区 · 写推导过程</b>
         <span>只用来打草稿，<b>不对这里判分</b> · 判分看下面的答案框</span>
+        <button class="fold" onclick="togglePad(${i})" id="fold-${i}">收起 ▲</button>
       </div>
+      <div id="padbody-${i}">
       <div class="pad" id="padwrap-${i}">
         <canvas id="pad-${i}"></canvas>
         <div class="ph">在这里写计算过程（支持手指 / Apple Pencil）</div>
@@ -351,6 +410,7 @@ function renderCard(f, i){
         <button onclick="undoStroke(${i})">↩ 撤销</button>
         <button class="clr" onclick="clearPad(${i})">✕ 清空</button>
         ${q.answer!==undefined ? `<button onclick="showAns('${f.key}')">💡 展开答案</button>`:''}
+      </div>
       </div>
     </div>
     ${ansHTML}
@@ -377,7 +437,7 @@ function initPad(f, i){
 
   function resize(){
     const w = wrap.clientWidth;
-    const h = Math.max(150, Math.min(320, Math.round(w * 0.42)));
+    const h = Math.max(110, Math.min(190, Math.round(w * 0.26)));
     cv.style.height = h + 'px';
     cv.width = Math.round(w * dpr);
     cv.height = Math.round(h * dpr);
@@ -431,6 +491,7 @@ function initPad(f, i){
   }
   function end(){
     if(padState[i]) padState[i].drawing = false;
+    _strokesDirty = true;
     saveState();
   }
 
@@ -458,6 +519,15 @@ function redraw(i, ctx, w, h){
   if(arr.length) document.getElementById('padwrap-'+i)?.classList.add('has');
 }
 
+function togglePad(i){
+  const body = document.getElementById('padbody-'+i);
+  const btn = document.getElementById('fold-'+i);
+  if(!body) return;
+  const collapsed = body.style.display === 'none';
+  body.style.display = collapsed ? '' : 'none';
+  if(btn) btn.textContent = collapsed ? '收起 ▲' : '展开 ▼';
+}
+
 function setColor(btn){
   const i = btn.dataset.i;
   if(padState[i]) padState[i].color = btn.dataset.c;
@@ -480,6 +550,7 @@ function undoStroke(i){
   ctx.clearRect(0,0,cv.width,cv.height);
   ctx.restore();
   redraw(i, ctx, st.w || cv.clientWidth, st.h || cv.clientHeight);
+  _strokesDirty = true;
   saveState();
 }
 
@@ -493,6 +564,7 @@ function clearPad(i){
   ctx.clearRect(0,0,cv.width,cv.height);
   ctx.restore();
   document.getElementById('padwrap-'+i)?.classList.remove('has');
+  _strokesDirty = true;
   saveState();
 }
 
