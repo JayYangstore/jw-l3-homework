@@ -3,14 +3,19 @@
    ============================================================ */
 
 const LS_KEY = 'jw_l3_v1';
+const MB_KEY = 'jw_l3_mistakes_v1';   // 错题本（独立键，不随「清空本专题」被清掉）
 let DATA = null;          // 题目库
-let curTopic = null;      // 当前专题
+let curTopic = null;      // 当前专题（对象）
+let curTopicId = '';      // 当前专题 id（字符串）—— submitted 按它隔离
 let curQIdx = 0;          // 当前题在全专题的序号
 let flat = [];            // 当前专题的扁平题目列表
 let answers = {};         // { qKey: [输入值...] }
 let strokes = {};         // { qKey: [点数组...] }  手写笔迹
 let mode = 'view';        // view | practice | result
 let t0 = 0;               // 进入时间戳
+let submitted = {};       // { topicId: { qKey: true } }  已点过「提交」的题 -> 只有这些题才判分（按专题隔离）
+let mistakeBook = {};     // { qKey: {addedAt, topic, step, group, qno, text, answer, myans, tries} }  长期错题本
+let redoOnly = false;     // 错题重做模式：只显示错题本里的题
 
 /* ---------- 工具 ---------- */
 const $ = s => document.querySelector(s);
@@ -124,8 +129,9 @@ function saveState(){
   // ① 轻量状态 → localStorage（答案 + 进度，不含笔迹）
   try{
     localStorage.setItem(LS_KEY, JSON.stringify({
-      topic: curTopic, idx: curQIdx, answers, mode, ts: Date.now()
+      topic: curTopicId, idx: curQIdx, answers, submitted, mode, ts: Date.now()
     }));
+    saveMistakeBook();
   }catch(e){
     // localStorage 满了 → 答案也存不下，只能提示
     if(!window.__lsWarned){ window.__lsWarned = 1; toast('浏览器存储已满，进度可能无法保存'); }
@@ -162,6 +168,22 @@ function loadState(){
     return d && d.answers ? d : null;
   }catch(e){ return null; }
 }
+/** 从全库题目反查一道题的完整信息（错题本重做时用） */
+function findQuestionByKey(key){
+  if(!DATA) return null;
+  for(const t of DATA.topics){
+    for(const st of t.steps){
+      for(const g of st.groups){
+        for(const q of g.questions){
+          if(`${t.id}|${st.no}|${g.no}|${q.no}` === key){
+            return {topic:t, step:st, group:g, q};
+          }
+        }
+      }
+    }
+  }
+  return null;
+}
 function clearState(){
   try{ localStorage.removeItem(LS_KEY); }catch(e){}
   idbClear();
@@ -173,6 +195,46 @@ function restoreStrokes(){
     return false;
   }).catch(()=>false);
 }
+
+/** 错题本：独立于专题进度，跨专题长期保存 */
+function loadMistakeBook(){
+  try{
+    const m = JSON.parse(localStorage.getItem(MB_KEY) || '{}');
+    return (m && typeof m === 'object') ? m : {};
+  }catch(e){ return {}; }
+}
+function saveMistakeBook(){
+  try{ localStorage.setItem(MB_KEY, JSON.stringify(mistakeBook)); }
+  catch(e){ if(!window.__mbWarned){ window.__mbWarned=1; toast('错题本保存失败（存储已满）'); } }
+}
+/** 加入错题本（可手动加入，也可交卷时自动收录） */
+function addMistake(key, opts){
+  const f = flat.find(x => x.key === key);
+  if(!f) return;
+  const q = f.q;
+  const cur = mistakeBook[key] || {tries:0};
+  mistakeBook[key] = {
+    addedAt: cur.addedAt || Date.now(),
+    updatedAt: Date.now(),
+    topic: curTopicId,
+    topicName: (curTopic && curTopic.name) || curTopicId,
+    step: f.step.no, stepName: f.step.name,
+    group: f.group.no,
+    qno: q.no,
+    text: q.text,
+    answer: (q.blanks||[]).map(b=>(b.label?b.label+' ':'')+b.value+(b.unit||'')).join(' / '),
+    blanks: q.blanks || [],
+    myans: (opts && opts.myans) ? opts.myans : (answers[key]||[]).map(v=>String(v||'').trim()),
+    tries: (cur.tries||0) + 1,
+    manual: !!(opts && opts.manual)
+  };
+  saveMistakeBook();
+}
+function removeMistake(key){
+  delete mistakeBook[key];
+  saveMistakeBook();
+}
+function mistakeCount(){ return Object.keys(mistakeBook).length; }
 
 /* ---------- 题目扁平化 ---------- */
 function flatten(topic){
@@ -194,6 +256,7 @@ function flatten(topic){
 /* ---------- 渲染：起始页 ---------- */
 function renderHome(){
   mode = 'view';
+  mistakeBook = loadMistakeBook();   // ★ 首页也要能看到错题本数量
   // 首页不显示进度条和返回按钮
   const tp = document.getElementById('topprog'); if(tp) tp.style.display='none';
   const pt = document.getElementById('progtxt'); if(pt) pt.textContent='';
@@ -207,8 +270,10 @@ function renderHome(){
         <summary>📌 第一次用？点这里看操作说明</summary>
         <ol>
           <li>选一个专题 → 点「开始做」</li>
-          <li>在每题的<b>手写板</b>写推导过程（iPad 用 Apple Pencil，手指也行）</li>
-          <li>在<b>答案框</b>填最终答案 → 系统<b>立即判分</b>，对错马上显示</li>
+          <li>在每题的<b>草稿区</b>写推导过程（iPad 用 Apple Pencil，手指也行）</li>
+          <li>写错了可以<b>🩹 橡皮</b>擦掉、<b>↩ 撤销</b>回退一步、<b>↪ 重做</b>找回</li>
+          <li>在<b>答案框</b>填最终答案 → 点<b>「提交答案」</b>才判对错</li>
+          <li>判错的题<b>自动进错题本</b>，首页点「错题本」随时回来重做</li>
           <li>多空题按题目里空格的顺序填，比如「长13厘米,宽7厘米」就填 13 和 7</li>
           <li>进度自动保存，下次接着做</li>
         </ol>
@@ -219,6 +284,12 @@ function renderHome(){
         <span class="pill">${DATA.topics.length} 个专题</span>
         <span class="pill">${DATA.stats.multiBlank} 道多空题</span>
         <span class="pill">${DATA.stats.totalSteps} 个台阶</span>
+      </div>
+
+      <div class="mbentry" onclick="openMistakeBook()">
+        <span class="mbicon">📕</span>
+        <span class="mbtxt">错题本<b>${mistakeCount()} 题</b> · 之前做错的题，随时回来重做</span>
+        <span class="mbgo">打开 →</span>
       </div>
 
       <div class="listhead">
@@ -259,9 +330,13 @@ function openTopic(id){
   const t = DATA.topics.find(x => x.id === id);
   if(!t) return;
   curTopic = t;
+  curTopicId = t.id;
   flat = flatten(t);
 
+  mistakeBook = loadMistakeBook();
   const st = loadState();
+  // submitted 按专题隔离存, 切专题不清空
+  if(st && st.submitted) submitted = st.submitted;
   if(st && st.topic === id){
     answers = st.answers || {};
     strokes = {};
@@ -323,20 +398,19 @@ function renderPractice(){
 
 /** 判分状态行：不用弹窗，直接在题目处显示 */
 function verdictHTML(j, blanks, ans){
-  if(!j) return `<span class="v-idle">填完答案，这里会立刻告诉你对不对</span>`;
+  if(!j) return `<span class="v-idle">填完答案后点「提交答案」，这里才会告诉你对不对</span>`;
   const filled = ans.map((v,i)=>String(v||'').trim()!=='');
   if(!filled.some(Boolean))
-    return `<span class="v-idle">填完答案，这里会立刻告诉你对不对</span>`;
+    return `<span class="v-idle">填完答案后点「提交答案」，这里才会告诉你对不对</span>`;
 
   const right = j.perBlank.every(Boolean);
-  const allFilled = j.perBlank.length === filled.filter(Boolean).length;
+  const emptyIdx = blanks.map((b,k)=>String(ans[k]||'').trim()===''?k:-1).filter(k=>k>=0);
 
   if(right){
     return `<span class="v-ok">✓ 答对了！${blanks.length>1?` ${blanks.length} 个空全对`:''}</span>`;
   }
-  if(!allFilled){
-    const miss = j.perBlank.map((ok,k)=>ok?null:k).filter(x=>x!==null);
-    return `<span class="v-wait">还差 ${miss.length} 个空没填（${miss.map(k=>`第${k+1}空`).join('、')}）</span>`;
+  if(emptyIdx.length){
+    return `<span class="v-wait">还差 ${emptyIdx.length} 个空没填（${emptyIdx.map(k=>`第${k+1}空`).join('、')}），填完再提交</span>`;
   }
   // 答错：逐空说明
   const detail = blanks.map((b,k)=>{
@@ -354,7 +428,9 @@ function renderCard(f, i){
   const cur = i === curQIdx;
   const ans = answers[f.key] || [];
   const blanks = q.blanks || [];
-  const j = q.answer !== undefined ? judge(q, ans) : null;
+  // ★ 只有点过「提交」的题才判分；没提交的一律不显示对错
+  const isSub = !!submitted[curTopicId]?.[f.key];
+  const j = (q.answer !== undefined && isSub) ? judge(q, ans) : null;
 
   let ansHTML;
   if(!blanks.length){
@@ -362,9 +438,10 @@ function renderCard(f, i){
       <span style="font-size:12.5px">请对照老师发的原 PDF 完成，做完点下一题。</span></div>`;
   }else{
     const anyFilled = ans.some(v=>String(v||'').trim()!=='');
+    const inBook = !!mistakeBook[f.key];
     ansHTML = `<div class="answers">
       <div class="ttl">✏️ 填写答案${blanks.length>1?`（本题 ${blanks.length} 个空，按顺序填）`:''}
-        <span class="ttl-hint">👆 判分只看这里，填完立刻出结果</span></div>
+        <span class="ttl-hint">👆 填完点「提交」再判对错</span></div>
       ${blanks.map((b,k)=>{
         const v = ans[k] || '';
         let cls = '', st = '';
@@ -381,6 +458,12 @@ function renderCard(f, i){
           ${st}
         </div>`;
       }).join('')}
+      <div class="subrow">
+        <button class="submit ${isSub?'done':''}" onclick="submitAns('${f.key}')">
+          ${isSub ? '↻ 重新提交' : '✓ 提交答案'}</button>
+        <button class="madd ${inBook?'in':''}" onclick="toggleMistake('${f.key}')">
+          ${inBook ? '📕 已在错题本' : '📕 加入错题本'}</button>
+      </div>
       <div class="verdict" id="vd-${i}">${verdictHTML(j, blanks, ans)}</div>
     </div>`;
   }
@@ -407,7 +490,13 @@ function renderCard(f, i){
           <button data-c="#dc2626" data-i="${i}" style="background:#dc2626" onclick="setColor(this)"></button>
           <button data-c="#2563eb" data-i="${i}" style="background:#2563eb" onclick="setColor(this)"></button>
         </div>
+        <div class="toolset">
+          <button class="on" data-tool="pen" data-i="${i}" onclick="setTool(${i},'pen',this)">🖊 笔</button>
+          <button data-tool="erase" data-i="${i}" onclick="setTool(${i},'erase',this)">🩹 橡皮</button>
+          <button data-tool="stroke" data-i="${i}" onclick="setTool(${i},'stroke',this)">🗑 整笔擦</button>
+        </div>
         <button onclick="undoStroke(${i})">↩ 撤销</button>
+        <button onclick="redoStroke(${i})">↪ 重做</button>
         <button class="clr" onclick="clearPad(${i})">✕ 清空</button>
         ${q.answer!==undefined ? `<button onclick="showAns('${f.key}')">💡 展开答案</button>`:''}
       </div>
@@ -427,7 +516,16 @@ function formatQ(t){
 }
 
 /* ---------- 手写画布 ---------- */
-let padState = {};   // { i: {color, drawing, last} }
+let padState = {};   // { i: {color, drawing, last, mode} }
+let startedByPointer = false;   // 本次笔画是否由 pointer 事件启动（防 touch 双触发）
+let redoStack = {};  // { i: [被撤销的笔画...] }  支持「重做」
+
+/* 擦除模式：
+   'pen'     正常书写
+   'erase'   像素级橡皮擦（手指划过的地方擦掉，像真橡皮）
+   'stroke'  整笔擦（点到哪一笔就删掉那一整笔）
+*/
+const ERASE_R = 13;   // 橡皮半径(px)
 
 function initPad(f, i){
   const cv = document.getElementById('pad-'+i);
@@ -446,7 +544,7 @@ function initPad(f, i){
     redraw(i, ctx, w, h);
   }
 
-  padState[i] = {color:'#1e293b', drawing:false, last:null, w:0, h:0};
+  padState[i] = {color:'#1e293b', drawing:false, last:null, w:0, h:0, mode:'pen', erasing:false};
   resize();
   padState[i].w = wrap.clientWidth;
   padState[i].h = parseInt(cv.style.height) || 150;
@@ -465,10 +563,47 @@ function initPad(f, i){
 
   function start(e){
     e.preventDefault();
+    startedByPointer = (e && e.type === 'pointerdown');
     const st = padState[i];
-    st.drawing = true; st.last = pos(e);
+    const p = pos(e);
+    st.drawing = true; st.last = p;
     strokes[f.key] = strokes[f.key] || [];
-    strokes[f.key].push({color: st.color, pts:[st.last]});
+
+    if(st.mode === 'stroke'){
+      // 整笔擦：找最近的一笔（非 erase 轨迹），整笔删掉
+      const arr = strokes[f.key];
+      let best=-1, bestD=1e9;
+      arr.forEach((s2,k)=>{
+        if(s2.erase) return;                       // 不单独删擦除轨迹
+        const c = centroid(s2);
+        const d = (c.x-p.x)*(c.x-p.x) + (c.y-p.y)*(c.y-p.y);
+        if(d < bestD){ bestD = d; best = k; }
+      });
+      if(best >= 0 && bestD < 80*80){
+        const removed = arr.splice(best,1)[0];
+        redoStack[i] = redoStack[i] || [];
+        redoStack[i].push(removed);
+        // 整笔删了之后，之前盖在它上面的 erase 轨迹也不再有效 -> 全部清掉
+        // （否则重画时会缺一块）
+        for(let k=arr.length-1;k>=0;k--) if(arr[k].erase) arr.splice(k,1);
+        if(!arr.length) document.getElementById('padwrap-'+i)?.classList.remove('has');
+        redrawAll(i);
+        _strokesDirty = true; saveState();
+      }
+      st.drawing = false;
+      return;
+    }
+
+    if(st.mode === 'erase'){
+      // 像素级橡皮擦：记一条 erase 轨迹，重绘时跳过
+      strokes[f.key].push({erase:true, pts:[p]});
+      st.erasing = true;
+      wrap.classList.add('has');
+      drawEraseSegment(i, null, p, p);
+      return;
+    }
+
+    strokes[f.key].push({color: st.color, pts:[p]});
     wrap.classList.add('has');
   }
   function move(e){
@@ -478,6 +613,15 @@ function initPad(f, i){
     const p = pos(e);
     const arr = strokes[f.key];
     if(!arr || !arr.length) return;
+
+    if(st.mode === 'erase'){
+      const last = arr[arr.length-1];
+      const prev = last.pts[last.pts.length-1];
+      last.pts.push(p);
+      drawEraseSegment(i, prev, p);
+      return;
+    }
+
     arr[arr.length-1].pts.push(p);
     const ctx = cv.getContext('2d');
     ctx.strokeStyle = st.color;
@@ -495,12 +639,69 @@ function initPad(f, i){
     saveState();
   }
 
+  // ★ 只用 Pointer Events —— 现代 iPad Safari/Chrome 都支持。
+  //   之前同时绑了 touchstart/touchmove/touchend，真机上跟 pointer 事件
+  //   双触发，导致笔画状态错乱、撤销/橡皮失效。现在 touch 只做兜底：
+  //   仅当 pointerdown 没触发过（老旧 WebView）才接管。
   cv.addEventListener('pointerdown', start);
   cv.addEventListener('pointermove', move);
   window.addEventListener('pointerup', end);
-  cv.addEventListener('touchstart', start, {passive:false});
-  cv.addEventListener('touchmove', move, {passive:false});
-  cv.addEventListener('touchend', end);
+  window.addEventListener('pointercancel', end);
+  cv.addEventListener('touchstart', (e)=>{
+    if(startedByPointer) return;
+    e.preventDefault(); start(e);
+  }, {passive:false});
+  cv.addEventListener('touchmove', (e)=>{
+    if(startedByPointer) return;
+    e.preventDefault(); move(e);
+  }, {passive:false});
+  cv.addEventListener('touchend', (e)=>{
+    if(startedByPointer) return;
+    end(e);
+  });
+}
+
+/** 一笔的重心（整笔擦定位用） */
+function centroid(st){
+  const pts = st.pts || [];
+  if(!pts.length) return {x:0,y:0};
+  let x=0,y=0;
+  pts.forEach(p=>{ x+=p.x; y+=p.y; });
+  return {x:x/pts.length, y:y/pts.length};
+}
+
+/** 画一段擦除轨迹（destination-out = 真擦像素） */
+function drawEraseSegment(i, from, to){
+  const f = flat[i]; if(!f) return;
+  const cv = document.getElementById('pad-'+i); if(!cv) return;
+  const ctx = cv.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  ctx.save();
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.globalCompositeOperation = 'destination-out';
+  ctx.strokeStyle = 'rgba(0,0,0,1)';
+  ctx.fillStyle = 'rgba(0,0,0,1)';
+  ctx.lineWidth = ERASE_R*2;
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  ctx.beginPath();
+  if(from){ ctx.moveTo(from.x, from.y); ctx.lineTo(to.x, to.y); ctx.stroke(); }
+  else { ctx.arc(to.x, to.y, ERASE_R, 0, Math.PI*2); ctx.fill(); }
+  ctx.restore();
+}
+
+/** 全量重绘某题画布（含擦除轨迹） */
+function redrawAll(i){
+  const f = flat[i]; if(!f) return;
+  const cv = document.getElementById('pad-'+i); if(!cv) return;
+  const st = padState[i] || {};
+  const w = st.w || cv.clientWidth, h = st.h || cv.clientHeight;
+  const dpr = window.devicePixelRatio || 1;
+  const ctx = cv.getContext('2d');
+  ctx.save();
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.clearRect(0,0,cv.width,cv.height);
+  ctx.restore();
+  redraw(i, ctx, w, h);
 }
 
 function redraw(i, ctx, w, h){
@@ -509,6 +710,25 @@ function redraw(i, ctx, w, h){
   if(!f) return;
   const arr = strokes[f.key] || [];
   arr.forEach(st => {
+    if(st.erase){
+      // 擦除轨迹：用 destination-out 擦
+      ctx.save();
+      ctx.globalCompositeOperation = 'destination-out';
+      ctx.strokeStyle = 'rgba(0,0,0,1)';
+      ctx.fillStyle = 'rgba(0,0,0,1)';
+      ctx.lineWidth = ERASE_R*2;
+      ctx.lineCap='round'; ctx.lineJoin='round';
+      const pts = st.pts || [];
+      if(pts.length === 1){
+        ctx.beginPath(); ctx.arc(pts[0].x, pts[0].y, ERASE_R, 0, Math.PI*2); ctx.fill();
+      }else{
+        ctx.beginPath();
+        pts.forEach((p,k)=> k===0?ctx.moveTo(p.x,p.y):ctx.lineTo(p.x,p.y));
+        ctx.stroke();
+      }
+      ctx.restore();
+      return;
+    }
     ctx.strokeStyle = st.color; ctx.lineWidth = 2.4;
     ctx.lineCap='round'; ctx.lineJoin='round';
     ctx.beginPath();
@@ -538,25 +758,45 @@ function setColor(btn){
 function undoStroke(i){
   const f = flat[i]; if(!f) return;
   const arr = strokes[f.key]; if(!arr || !arr.length) return;
-  arr.pop();
-  const cv = document.getElementById('pad-'+i);
+  const removed = arr.pop();
+  redoStack[i] = redoStack[i] || [];
+  redoStack[i].push(removed);
   const wrap = document.getElementById('padwrap-'+i);
   if(arr.length===0) wrap?.classList.remove('has');
-  const st = padState[i];
-  const ctx = cv.getContext('2d');
-  const dpr = window.devicePixelRatio || 1;
-  ctx.save();
-  ctx.setTransform(1,0,0,1,0,0);
-  ctx.clearRect(0,0,cv.width,cv.height);
-  ctx.restore();
-  redraw(i, ctx, st.w || cv.clientWidth, st.h || cv.clientHeight);
+  redrawAll(i);
   _strokesDirty = true;
   saveState();
+}
+
+/** 重做（把撤销的那一笔放回去） */
+function redoStroke(i){
+  const f = flat[i]; if(!f) return;
+  const rs = redoStack[i]; if(!rs || !rs.length) return;
+  strokes[f.key] = strokes[f.key] || [];
+  strokes[f.key].push(rs.pop());
+  redrawAll(i);
+  document.getElementById('padwrap-'+i)?.classList.add('has');
+  _strokesDirty = true;
+  saveState();
+}
+
+/** 切换工具模式：笔 / 像素橡皮 / 整笔橡皮 */
+function setTool(i, mode, btn){
+  const st = padState[i]; if(!st) return;
+  st.mode = mode;
+  const wrap = document.getElementById('padwrap-'+i);
+  if(wrap) wrap.dataset.tool = mode;
+  // 工具条按钮高亮
+  btn?.parentElement?.querySelectorAll('button[data-tool]').forEach(b=>b.classList.remove('on'));
+  btn?.classList.add('on');
+  const cv = document.getElementById('pad-'+i);
+  if(cv) cv.style.cursor = (mode === 'pen') ? 'crosshair' : 'cell';
 }
 
 function clearPad(i){
   const f = flat[i]; if(!f) return;
   strokes[f.key] = [];
+  redoStack[i] = [];
   const cv = document.getElementById('pad-'+i);
   const ctx = cv.getContext('2d');
   ctx.save();
@@ -573,29 +813,110 @@ function onAns(key, k, val){
   answers[key] = answers[key] || [];
   answers[key][k] = val;
   saveState();
-  // 局部刷新该题卡片（不整页重绘，避免打断输入）
+  // ★ 填答案时【不判分】——只有点「提交」才判。
+  //   但如果这题之前已经提交过，要实时把旧的判分标记撤掉（答案改了，状态就过期了）。
   const i = flat.findIndex(f => f.key === key);
   if(i < 0) return;
   const card = document.getElementById('card-'+i);
   if(!card) return;
   const f = flat[i];
   const blanks = f.q.blanks || [];
-  const j = judge(f.q, answers[key]);
 
-  // 更新这个输入框的样式
-  const inp = card.querySelectorAll('.abl input')[k];
-  if(inp) inp.className = String(val).trim()==='' ? '' : (j.perBlank[k] ? 'ok' : 'no');
-  const stEl = card.querySelectorAll('.abl .s')[k];
-  if(stEl){ stEl.textContent = j.perBlank[k] ? '✓' : '✗';
-    stEl.className = 's ' + (j.perBlank[k]?'ok':'no'); }
-
-  // ★ 刷新题目处的判分状态行（不用弹窗）
-  const vd = document.getElementById('vd-'+i);
-  if(vd) vd.innerHTML = verdictHTML(j, blanks, answers[key]);
-
-  card.classList.toggle('answered', j.correct);
-  card.classList.toggle('wrong', !j.correct && answers[key].some(v=>String(v||'').trim()!==''));
+  if(submitted[curTopicId]?.[f.key]){
+    // 已提交过 -> 改动答案 => 撤销判分状态，等重新提交
+    delete submitted[curTopicId][f.key];
+    const inp = card.querySelectorAll('.abl input')[k];
+    if(inp) inp.className = '';
+    const stEl = card.querySelectorAll('.abl .s')[k];
+    if(stEl){ stEl.textContent=''; stEl.className='s'; }
+    const vd = document.getElementById('vd-'+i);
+    if(vd) vd.innerHTML = `<span class="v-idle">答案改了，点「提交答案」重新判</span>`;
+    card.classList.remove('answered','wrong');
+    const sbtn = card.querySelector('.submit');
+    if(sbtn){ sbtn.textContent='✓ 提交答案'; sbtn.classList.remove('done'); }
+    saveState();
+  }
   updateProgress();
+}
+
+/** ★ 点「提交」才判分 */
+function submitAns(key){
+  const i = flat.findIndex(f => f.key === key);
+  if(i < 0) return;
+  const f = flat[i];
+  const blanks = f.q.blanks || [];
+  const ans = answers[key] || [];
+
+  if(!blanks.length){ toast('这题是涂色/看图题，不用填答案'); return; }
+  if(!ans.some(v=>String(v||'').trim()!=='')){ toast('先填答案再提交哦'); return; }
+  // ★ 所有空都填了才能判分 —— 没填完不算错，不进错题本
+  const unfilled = blanks.filter((b,k)=>String(ans[k]||'').trim()==='')
+                     .map((b,k)=>blanks.indexOf(b)+1);
+  if(unfilled.length){
+    toast(`还有 ${unfilled.length} 个空没填（${unfilled.map(n=>'第'+n+'空').join('、')}），填完再提交`);
+    return;
+  }
+
+  submitted[curTopicId] = submitted[curTopicId] || {};
+  submitted[curTopicId][key] = true;
+  saveState();
+
+  const j = judge(f.q, ans);
+  const card = document.getElementById('card-'+i);
+  if(card){
+    card.querySelectorAll('.abl input').forEach((inp,k)=>{
+      const v = ans[k];
+      if(inp && String(v||'').trim()!=='') inp.className = j.perBlank[k] ? 'ok' : 'no';
+    });
+    card.querySelectorAll('.abl .s').forEach((el,k)=>{
+      if(String(ans[k]||'').trim()!==''){
+        el.textContent = j.perBlank[k] ? '✓' : '✗';
+        el.className = 's ' + (j.perBlank[k]?'ok':'no');
+      }
+    });
+    const vd = document.getElementById('vd-'+i);
+    if(vd) vd.innerHTML = verdictHTML(j, blanks, ans);
+    card.classList.toggle('answered', j.correct);
+    card.classList.toggle('wrong', !j.correct);
+    const sbtn = card.querySelector('.submit');
+    if(sbtn){ sbtn.textContent='↻ 重新提交'; sbtn.classList.add('done'); }
+  }
+
+  // ★ 判错 -> 自动进错题本
+  if(!j.correct){
+    addMistake(key, {myans: ans.map(v=>String(v||'').trim())});
+    refreshMistakeBtns();
+    toast('❌ 这题错了，已放进错题本');
+  }else{
+    // 做对了 -> 如果之前在错题本里，标记已订正（不移除，等板栗重做过再处理）
+    const mb = mistakeBook[key];
+    if(mb){ mb.fixedAt = Date.now(); mb.fixed = true; saveMistakeBook(); refreshMistakeBtns(); }
+    toast('✅ 答对了！');
+  }
+  updateProgress();
+}
+
+/** 手动加入/移出错题本 */
+function toggleMistake(key){
+  if(mistakeBook[key]){
+    removeMistake(key);
+    toast('已移出错题本');
+  }else{
+    addMistake(key, {manual:true});
+    toast('📕 已加入错题本');
+  }
+  refreshMistakeBtns();
+}
+/** 刷新所有「加入错题本」按钮的显示 */
+function refreshMistakeBtns(){
+  flat.forEach(f=>{
+    const i = flat.indexOf(f);
+    const b = document.querySelector(`#card-${i} .madd`);
+    if(!b) return;
+    const inBook = !!mistakeBook[f.key];
+    b.textContent = inBook ? '📕 已在错题本' : '📕 加入错题本';
+    b.classList.toggle('in', inBook);
+  });
 }
 
 function goQ(i){
@@ -641,9 +962,101 @@ function showAns(key){
 }
 
 function confirmReset(){
-  if(!confirm('清空本专题的所有答案和笔迹？')) return;
+  if(!confirm('清空本专题的所有答案和笔迹？\n（错题本不受影响）')) return;
   answers = {}; strokes = {}; curQIdx = 0;
+  if(submitted[curTopicId]) delete submitted[curTopicId];
   saveState(); renderPractice();
+}
+
+/* ---------- 错题本 ---------- */
+/** 打开错题本页面 */
+function openMistakeBook(){
+  mode = 'mistake';
+  const keys = Object.keys(mistakeBook);
+  const items = keys.map(k=>mistakeBook[k]).sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0));
+  $('#screen').innerHTML = `
+    <div class="qhead">
+      <div class="tt">📕 错题本</div>
+      <div>
+        <span class="chip c-step">共 ${items.length} 题</span>
+        ${items.length?`<span class="chip c-idx" style="color:#334155;background:#e2e8f0">做错 ${items.filter(x=>!x.fixed).length} · 已订正 ${items.filter(x=>x.fixed).length}</span>`:''}
+      </div>
+      <div class="qnav">
+        <button onclick="backHome()">← 专题列表</button>
+        ${items.length?`<button class="primary" onclick="startRedoAll()">🔁 全部重做一遍</button>`:''}
+      </div>
+    </div>
+    ${items.length ? `<div class="mblist">${items.map(it=>`
+      <div class="mbitem ${it.fixed?'fixed':''}">
+        <div class="mbh">
+          <span class="mbtag">${esc(it.topicName||'')}</span>
+          <span class="mbstep">台阶 ${esc(it.step||'')} · ${esc(it.stepName||'')} · 第 ${esc(it.group||'')} 组 · 第 ${esc(it.qno||'')} 题</span>
+          ${it.fixed?'<span class="mbfix">已订正</span>':'<span class="mbbad">做错了</span>'}
+        </div>
+        <div class="q">${formatQ(it.text||'')}</div>
+        <div class="ans">✓ 正确答案：${esc(it.answer||'')}</div>
+        <div class="mine">✗ 之前写的：${esc((it.myans||[]).map(v=>String(v||'').trim()||'（空）').join(' , '))}${it.tries?`　（错过 ${it.tries} 次）`:''}</div>
+        <div class="mba">
+          <button class="primary" onclick="startRedoOne('${it.key}')">🔁 重做这题</button>
+          <button onclick="removeMistake('${it.key}');openMistakeBook()">🗑 移出错题本</button>
+        </div>
+      </div>`).join('')}</div>`
+      : `<div class="card"><div class="okall">📭 错题本还是空的。<br><br>做题时点「提交答案」判错，会自动收进这里；也可以手动点「📕 加入错题本」。</div></div>`}
+  `;
+  window.scrollTo(0,0);
+}
+/** 重做某一题：切到该题所在的专题并定位（跨专题也能找到）
+ *  顺序很重要：先切专题(openTopic 会从 localStorage 恢复 answers)，
+ *  再清这题的答案+提交状态，最后重绘。 */
+function startRedoOne(key){
+  const it = mistakeBook[key]; if(!it) return;
+  const found = findQuestionByKey(key);
+  if(!found){ toast('原题找不到了（题目库已更新？）'); return; }
+
+  // 1) 先切专题（内部会 restore answers）
+  openTopic(found.topic.id);
+
+  // 2) 再清这题: 答案置空 + 取消提交状态 + 清笔迹(让他重写过程)
+  answers[key] = [];
+  if(submitted[curTopicId]) delete submitted[curTopicId][key];
+  strokes[key] = [];
+  saveState();
+
+  // 3) 重绘 + 定位
+  const idx = flat.findIndex(f=>f.key===key);
+  if(idx<0){ toast('定位失败'); return; }
+  curQIdx = idx;
+  renderPractice();
+  setTimeout(()=>{
+    goQ(idx);
+    toast('🔁 重做这道错题（已清空上次答案）');
+  }, 100);
+}
+/** 全部重做：进入第一个有错题的专题，按错题顺序逐题跳 */
+function startRedoAll(){
+  const keys = Object.keys(mistakeBook).filter(k=>!mistakeBook[k].fixed);
+  const list = keys.length ? keys : Object.keys(mistakeBook);
+  if(!list.length){ toast('错题本是空的'); return; }
+  const first = list[0];
+  const found = findQuestionByKey(first);
+  if(!found){ toast('原题找不到了'); return; }
+
+  // 重做队列：让「下一题」在错题之间跳转
+  window.__redoQueue = list;
+
+  openTopic(found.topic.id);
+  // 清掉所有待重做题的旧答案
+  list.forEach(k=>{
+    answers[k] = [];
+    if(submitted[curTopicId]) delete submitted[curTopicId][k];
+  });
+  saveState();
+  const idx = flat.findIndex(f=>f.key===first);
+  if(idx>=0){
+    curQIdx = idx;
+    renderPractice();
+    setTimeout(()=>{ goQ(idx); toast(`🔁 开始重做，共 ${list.length} 题`); }, 100);
+  }
 }
 
 /* ---------- 交卷 ---------- */
@@ -672,11 +1085,19 @@ function renderResult(){
       if(hasAns) judgeable++;   // 涂色题不判对错
       return;
     }
+    // 只有填满所有空的题才参与判分（没填完 = 没做，不算错）
+    const unfilled = blanks.filter((b,k)=>String(a[k]||'').trim()==='').length;
+    if(unfilled) return;    // 没做完的题不计入正确率、也不进错题本
     const j = judge(q, a);
     judgeable++;
     if(j.correct) right++;
-    else wrong.push({f, i, j, user:a});
+    else {
+      wrong.push({f, i, j, user:a});
+      // ★ 交卷时自动收录错题本（即使没点过提交，也按已填答案判）
+      if(!mistakeBook[f.key]) addMistake(f.key, {myans: a.map(v=>String(v||'').trim())});
+    }
   });
+  saveMistakeBook();
 
   const rate = judgeable ? Math.round(right/judgeable*100) : 0;
   let lv, lvc;
@@ -724,11 +1145,13 @@ function renderResult(){
 
 function redoTopic(){
   answers = {}; strokes = {}; curQIdx = 0;
+  if(submitted[curTopicId]) delete submitted[curTopicId];
   mode = 'practice'; t0 = Date.now();
   saveState(); renderPractice();
 }
 
 function backHome(){
+  mistakeBook = loadMistakeBook();
   saveState();
   // 清掉 ?t= 参数，避免刷新又跳回专题
   try{ history.replaceState(null,'',location.pathname); }catch(e){}
