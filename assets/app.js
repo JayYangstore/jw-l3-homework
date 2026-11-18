@@ -263,8 +263,12 @@ function renderHome(){
   const bb = document.getElementById('backbtn'); if(bb) bb.style.display='none';
   $('#screen').innerHTML = `
     <div class="hero">
-      <h2>家卫老师小学数学 L3 · 在线作业</h2>
+      <h2>小学数学 · 在线作业</h2>
       <div class="sub">${DATA.topics.length} 个专题 · ${DATA.stats.totalQuestions} 道题 · 不用打印，做完自动判分</div>
+      <div class="sysnote">
+        <span class="sn-b">🧠 思维专题</span>家卫老师方法论（代换/整体/有序…）奥数能力线
+        <span class="sn-b tb">📘 课内专题</span>人教版教材知识点，同一个「铺台阶」方法做课内过关
+      </div>
 
       <details class="howto" id="howtoBox">
         <summary>📌 第一次用？点这里看操作说明</summary>
@@ -316,10 +320,13 @@ function renderTopicCards(kw){
     const done = st && st.topic === t.id;
     const pct = done ? (Object.keys(st.answers||{}).filter(k=>k.startsWith(t.id+'|') &&
       (st.answers[k]||[]).some(v=>String(v).trim()!=='')).length / t.stats.questions * 100) : 0;
-    return `<button class="tcard ${done?'done':''}" onclick="openTopic('${t.id}')">
+    const isTb = t.kind === 'textbook';
+    return `<button class="tcard ${done?'done':''} ${isTb?'tb':''}" onclick="openTopic('${t.id}')">
       ${done && pct>0 ? `<span class="pg">${Math.round(pct)}%</span>` : ''}
+      ${isTb ? `<span class="tbbadge">📘 课内</span>` : ''}
       <div class="nm">${esc(t.name)}</div>
       <div class="mt">${t.stats.questions} 题 · ${t.stats.steps} 个台阶 · ${t.stats.groups} 组</div>
+      ${t.unit ? `<div class="mu">${esc(t.unit)}</div>` : ''}
       <div class="go">开始做 →</div>
     </button>`;
   }).join('') || '<div style="grid-column:1/-1;text-align:center;color:#94a3b8;padding:30px">没有匹配的专题</div>';
@@ -372,6 +379,11 @@ function renderPractice(){
         <span class="chip c-group">第 ${esc(cur.group.no)} 组</span>
         <span class="chip c-idx" style="color:#334155;background:#e2e8f0">第 ${curQIdx+1} / ${flat.length} 题</span>
       </div>
+      ${(cur.step.note||cur.step.demo) ? `
+      <div class="stepnote">
+        ${cur.step.note ? `<div class="sn-row"><span class="sn-k">台阶小记</span><span class="sn-v">${esc(cur.step.note)}</span></div>` : ''}
+        ${cur.step.demo ? `<div class="sn-row demo"><span class="sn-k">例题讲解</span><span class="sn-v">${esc(cur.step.demo)}</span></div>` : ''}
+      </div>` : ''}
       <div class="qnav">
         <button onclick="goQ(${curQIdx-1})" ${curQIdx===0?'disabled':''}>← 上一题</button>
         <button onclick="goQ(${curQIdx+1})" ${curQIdx===flat.length-1?'disabled':''}>下一题 →</button>
