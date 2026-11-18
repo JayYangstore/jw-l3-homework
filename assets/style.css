@@ -266,3 +266,35 @@ body{
   .qcard{break-inside:avoid;box-shadow:none;border:1px solid #ddd}
   .pad,.padtools,.answers{display:none}
 }
+
+/* ---------- 课内专题 ---------- */
+.tbbadge{
+  display:inline-block;background:#fef3c7;color:#92400e;border:1px solid #fcd34d;
+  font-size:11px;font-weight:700;padding:1px 7px;border-radius:9px;margin-bottom:6px;
+}
+.tcard.tb{background:linear-gradient(180deg,#fffdf5 0%,#ffffff 42%);border-color:#fde68a}
+.tcard.tb:hover{border-color:#f59e0b}
+.tcard .mu{font-size:11.5px;color:#92400e;margin-top:3px;opacity:.85}
+
+/* 台阶小记 / 例题讲解 */
+.stepnote{
+  margin-top:10px;background:#fffbeb;border:1px solid #fde68a;border-left:4px solid #f59e0b;
+  border-radius:8px;padding:9px 13px;display:flex;flex-direction:column;gap:5px;
+}
+.sn-row{display:flex;gap:9px;align-items:flex-start;font-size:13px;line-height:1.65}
+.sn-k{
+  flex:0 0 auto;background:#f59e0b;color:#fff;font-size:11px;font-weight:700;
+  padding:1px 7px;border-radius:4px;margin-top:2px;white-space:nowrap;
+}
+.sn-row.demo .sn-k{background:#0ea5e9}
+.sn-v{color:#1f2937;flex:1}
+.stepnote .sn-row.demo .sn-v{color:#0c4a6e}
+
+/* 首页体系说明 */
+.sysnote{
+  display:flex;align-items:center;gap:7px;flex-wrap:wrap;
+  background:#f8fafc;border:1px solid #e2e8f0;border-radius:9px;
+  padding:9px 13px;font-size:12.5px;color:#475569;margin:10px 0 4px;line-height:1.7;
+}
+.sysnote .sn-b{background:#e0e7ff;color:#3730a3;font-weight:700;padding:1px 7px;border-radius:4px;font-size:11px}
+.sysnote .sn-b.tb{background:#fef3c7;color:#92400e}
