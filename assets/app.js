@@ -300,6 +300,11 @@ function renderHome(){
         <span>📚 选择专题</span>
         <input class="tsrch" id="tsearch" placeholder="🔍 搜索..." oninput="filterTopics(this.value)">
       </div>
+      <div class="filtbar">
+        <button class="fbtn ${_filter==='all'?'on':''}" data-f="all" onclick="setFilter('all')">全部 ${DATA.topics.length}</button>
+        <button class="fbtn ${_filter==='textbook'?'on':''}" data-f="textbook" onclick="setFilter('textbook')">📘 课内 ${DATA.topics.filter(t=>t.kind==='textbook').length}</button>
+        <button class="fbtn ${_filter==='think'?'on':''}" data-f="think" onclick="setFilter('think')">🧠 思维 ${DATA.topics.filter(t=>t.kind!=='textbook').length}</button>
+      </div>
       <div class="tgrid" id="tgrid"></div>
     </div>`;
   renderTopicCards('');
@@ -310,13 +315,22 @@ function filterTopics(q){
   renderTopicCards(kw);
 }
 
+let _filter = 'all';
+function setFilter(f){
+  _filter = f;
+  document.querySelectorAll('.fbtn').forEach(b=>b.classList.toggle('on', b.dataset.f===f));
+  const s = document.getElementById('tsearch');
+  renderTopicCards(s ? s.value : '');
+}
 function renderTopicCards(kw){
   const grid = $('#tgrid');
   if(!grid) return;
   const st = loadState();
-  grid.innerHTML = DATA.topics.filter(t =>
-    !kw || t.name.toLowerCase().includes(kw) || (t.title||'').toLowerCase().includes(kw)
-  ).map(t => {
+  grid.innerHTML = DATA.topics.filter(t => {
+    if(_filter==='textbook' && t.kind!=='textbook') return false;
+    if(_filter==='think' && t.kind==='textbook') return false;
+    return !kw || t.name.toLowerCase().includes(kw) || (t.title||'').toLowerCase().includes(kw);
+  }).map(t => {
     const done = st && st.topic === t.id;
     const pct = done ? (Object.keys(st.answers||{}).filter(k=>k.startsWith(t.id+'|') &&
       (st.answers[k]||[]).some(v=>String(v).trim()!=='')).length / t.stats.questions * 100) : 0;
