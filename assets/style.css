@@ -392,3 +392,10 @@ body{
 }
 .confirmbar button.ghost{background:rgba(255,255,255,.14);color:#e2e8f0}
 .confirmbar button:hover{filter:brightness(1.08)}
+
+/* 锁定组更明确的视觉 */
+.grpblk.locked{opacity:.95}
+.grpblk.locked .gbadge{background:#e2e8f0;color:#94a3b8}
+.grpblk.locked .gstate{color:#94a3b8;font-style:italic}
+.grpblk.gcur .ghead{box-shadow:inset 3px 0 0 #f59e0b}
+.grpblk.gpass .ghead{box-shadow:inset 3px 0 0 #16a34a}
