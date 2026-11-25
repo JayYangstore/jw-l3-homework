@@ -464,7 +464,7 @@ function renderPractice(){
       <div>
         <span class="chip c-step">台阶 ${esc(cur.step.no)} · ${esc(cur.step.name)}</span>
         <span class="chip c-group">第 ${esc(cur.group.no)} 组</span>
-        <span class="chip c-idx" style="color:#334155;background:#e2e8f0">第 ${esc(cur.group.no)} 组 / 共 ${cur.step.groups.length} 组</span>
+        <span class="chip c-idx" style="color:#334155;background:#e2e8f0">第 ${visibleQIdx(cur)+1} / ${visibleQList().length} 题</span>
       </div>
       <div class="qnav">
         <button onclick="goQ(${curQIdx-1})" ${curQIdx===0?'disabled':''}>← 上一题</button>
@@ -1203,6 +1203,28 @@ function scrollToCur(){
   }, 60);
 }
 
+/** 当前可见（该做）的题目列表 */
+function visibleQList(){
+  if(!curTopic) return [];
+  const out = [];
+  curTopic.steps.forEach(s => {
+    s.groups.forEach(g => {
+      const gi = parseInt(g.no,10)||1;
+      const vis = maxVisibleGroup(String(s.no), s.groups.length);
+      const expanded = (expandedGroups[`${curTopicId}|${s.no}`]||{})[g.no];
+      if(gi <= vis || expanded) g.questions.forEach(q=>out.push({s,g,q}));
+    });
+  });
+  return out;
+}
+/** 某道题在可见列表里的序号 */
+function visibleQIdx(f){
+  const vl = visibleQList();
+  for(let i=0;i<vl.length;i++){
+    if(vl[i].s.no===f.step.no && vl[i].g.no===f.group.no && vl[i].q.no===f.q.no) return i;
+  }
+  return 0;
+}
 /** 当前该做的题数（可见题 = 每台阶第1组 + 已解锁组） */
 function pendingQ(){
   if(!curTopic) return 0;
