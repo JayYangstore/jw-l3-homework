@@ -1136,7 +1136,12 @@ function checkGroupPass(f){
     const j = judge(q, a);
     return j.correct;
   });
-  if(!all) return;
+  if(!all){
+    // ★ 这一组做过了但没全对 → 解锁下一组（同型换数据再试）
+    saveState();
+    rerenderList();
+    return;
+  }
 
   ps[stepNo][gno] = true;
   const gp = getPass();
