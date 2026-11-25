@@ -43,23 +43,42 @@ function getPassState(){
   if(!passState[curTopicId]) passState[curTopicId] = {};
   return passState[curTopicId];
 }
-/** 该台阶当前应该显示到第几组（第1组默认可见；错了才解锁下一组） */
+/** 该组的题是否已全部提交过（= 尝试过这一组） */
+function groupFullyTried(stepNo, gno){
+  const st = curTopic && curTopic.steps.find(s=>s.no===String(stepNo));
+  if(!st) return false;
+  const grp = st.groups.find(g=>g.no===String(gno));
+  if(!grp || !grp.questions.length) return false;
+  return grp.questions.every(q=>{
+    const key = `${curTopicId}|${stepNo}|${gno}|${q.no}`;
+    return !!submitted[curTopicId]?.[key];
+  });
+}
+/** 该台阶当前应该显示到第几组
+    - 第1组默认可见
+    - 某组已尝试且没全对 → 解锁下一组（同型换数据再试）
+    - 台阶已过关 → 后续组收起（可手动展开加练） */
 function maxVisibleGroup(stepNo, stepGroups){
-  const ps = getPassState();
-  const st = ps[stepNo] || {};
+  const st = getPassState()[String(stepNo)] || {};
+  let vis = 1;
   for(let gi=1; gi<=stepGroups; gi++){
-    if(!st[gi]) return gi;      // 第一组没过 → 停在这组
+    if(st[String(gi)]){ vis = gi; continue; }   // 这组已过关
+    if(groupFullyTried(stepNo, gi)){            // 这组做过了但没全对
+      vis = Math.max(vis, gi+1);                // 解锁下一组
+    } else {
+      break;                                     // 还没做完 → 停在这组
+    }
   }
-  return stepGroups;             // 全过
+  return Math.min(vis, stepGroups);
 }
 /** 组是否已全对 */
 function isGroupPassed(stepNo, groupNo){
-  const st = getPassState()[stepNo] || {};
-  return !!st[groupNo];
+  const st = getPassState()[String(stepNo)] || {};
+  return !!st[String(groupNo)];
 }
 /** 台阶是否已过关（第1组通过即可） */
 function isStepPassed(stepNo){
-  return !!getPass()[stepNo];
+  return !!getPass()[String(stepNo)];
 }
 
 /* ---------- 工具 ---------- */
@@ -479,7 +498,7 @@ function renderPractice(){
 
 /** 题目是否当前可见（未被收起的组） */
 function isQVisible(f){
-  const stepNo = f.step.no, gno = f.group.no;
+  const stepNo = String(f.step.no), gno = String(f.group.no);
   const total = f.step.groups ? f.step.groups.length : 5;
   const vis = maxVisibleGroup(stepNo, total);
   const gi = parseInt(gno, 10) || 1;
@@ -517,9 +536,13 @@ function renderStepsHTML(t){
     const st = getPassState()[s.no] || {};
     const passedGroups = Object.keys(st).filter(k=>st[k]).map(Number).sort((a,b)=>a-b);
     const stepPass = isStepPassed(s.no);
-    // 本台阶「当前待做组」
-    let curG = 1;
-    for(let gi=1; gi<=total; gi++){ if(!st[gi]){ curG = gi; break; } curG = gi; }
+    // 本台阶「当前待做组」：第一个没过、且还没做完的组
+    let curG = total;
+    for(let gi=1; gi<=total; gi++){
+      if(!st[gi]){ curG = gi; break; }
+    }
+    // 若全部都过了，curG 指向最后一组
+    if(Object.keys(st).length === total) curG = total;
     const allPass = passedGroups.length === total;
 
     out += `<div class="stepblk ${stepPass?'passed':''}" id="stepblk-${s.no}">
@@ -1099,7 +1122,7 @@ function rebuildPassState(){
 
 /** 一组全部答对 → 该组过关；台阶过关则后续组收起 */
 function checkGroupPass(f){
-  const stepNo = f.step.no, gno = f.group.no;
+  const stepNo = String(f.step.no), gno = String(f.group.no);
   const ps = getPassState();
   ps[stepNo] = ps[stepNo] || {};
   const grp = f.step.groups.find(g => g.no === gno);
