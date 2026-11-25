@@ -1213,10 +1213,20 @@ function updateProgress(){
     const a = answers[f.key];
     return a && a.some(v => String(v||'').trim() !== '');
   }).length;
+  // 顶栏：显示台阶过关数（不是题数）
+  const gp = getPass();
+  const stepTotal = curTopic ? curTopic.steps.length : 1;
+  const stepPassed = curTopic ? curTopic.steps.filter(s => gp[String(s.no)]).length : 0;
   const p = $('#progfill');
-  if(p) p.style.width = (answered/flat.length*100)+'%';
+  if(p) p.style.width = (stepPassed/stepTotal*100)+'%';
   const t = $('#progtxt');
-  if(t) t.textContent = `${answered}/${flat.length}`;
+  if(t) t.textContent = `过关 ${stepPassed}/${stepTotal}`;
+
+  // 页面内：台阶进度条 + 标签
+  const el = document.querySelector('.qhead div[style*="flex-wrap"] span');
+  if(el && curTopic) el.textContent = `🎯 已过关 ${stepPassed} / ${stepTotal} 个台阶`;
+  const bar = document.querySelector('.qhead div[style*="flex-wrap"] span span i');
+  if(bar && curTopic) bar.style.width = (stepPassed/stepTotal*100)+'%';
 }
 
 function showAns(key){
