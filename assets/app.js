@@ -1243,10 +1243,27 @@ function showAns(key){
 }
 
 function confirmReset(){
-  if(!confirm('清空本专题的所有答案和笔迹？\n（错题本不受影响）')) return;
+  const bar = document.getElementById('__confirmbar');
+  if(bar) bar.remove();
+  const el = document.createElement('div');
+  el.id = '__confirmbar';
+  el.className = 'confirmbar';
+  el.innerHTML = `<span>清空本专题的所有答案和笔迹？（错题本不受影响）</span>
+    <button onclick="doReset()">确定清空</button>
+    <button class="ghost" onclick="document.getElementById('__confirmbar').remove()">取消</button>`;
+  document.getElementById('screen').appendChild(el);
+  el.scrollIntoView({block:'nearest'});
+}
+function doReset(){
+  const bar = document.getElementById('__confirmbar');
+  if(bar) bar.remove();
   answers = {}; strokes = {}; curQIdx = 0;
   if(submitted[curTopicId]) delete submitted[curTopicId];
-  saveState(); renderPractice();
+  // ★ 过关状态也要清掉
+  if(passed[curTopicId]) delete passed[curTopicId];
+  if(passState[curTopicId]) delete passState[curTopicId];
+  saveState(); savePassed();
+  renderPractice();
 }
 
 /* ---------- 错题本 ---------- */
@@ -1346,10 +1363,25 @@ function finishPractice(){
     const a = answers[f.key];
     return !(a && a.some(v => String(v||'').trim() !== ''));
   }).length;
-  const msg = unanswered
-    ? `还有 ${unanswered} 题没做，确定交卷吗？`
-    : '确定交卷看结果吗？';
-  if(!confirm(msg)) return;
+  // ★ 不用 confirm 弹窗（会阻塞页面）—— 改成页面内确认条
+  const bar = document.getElementById('__confirmbar');
+  if(bar){ bar.remove(); }
+  const el = document.createElement('div');
+  el.id = '__confirmbar';
+  el.className = 'confirmbar';
+  el.innerHTML = unanswered
+    ? `<span>还有 <b>${unanswered}</b> 题没做，确定交卷吗？</span>
+       <button onclick="doFinish()">确定交卷</button>
+       <button class="ghost" onclick="document.getElementById('__confirmbar').remove()">再想想</button>`
+    : `<span>确定交卷看结果吗？</span>
+       <button onclick="doFinish()">确定交卷</button>
+       <button class="ghost" onclick="document.getElementById('__confirmbar').remove()">再想想</button>`;
+  document.getElementById('screen').appendChild(el);
+  el.scrollIntoView({block:'nearest'});
+}
+function doFinish(){
+  const bar = document.getElementById('__confirmbar');
+  if(bar) bar.remove();
   mode = 'result';
   saveState();
   renderResult();
