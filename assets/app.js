@@ -843,15 +843,11 @@ function checkGroupPass(f){
     return;
   }
 
-  // 第2组及以后也过了 → 记录最好成绩
+  // 第2组及以后也过了 → 台阶过关（该台阶后续组保持收起，不用再做）
   if(!gp[stepNo] || parseInt(gno,10) > gp[stepNo]) gp[stepNo] = parseInt(gno,10);
   saveState();
   rerenderList();
-  if(parseInt(gno,10) < total){
-    toast(`✓ 第${gno}组也全对了，下一组已解锁`);
-  }else{
-    toast(`🏆 台阶${stepNo} 全部 5 组都做对了！`);
-  }
+  toast(`🎉 第${gno}组也全对了，台阶${stepNo}过关！后面的组不用做了`);
 }
 
 /** 手动加入/移出错题本 */
