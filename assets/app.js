@@ -4,6 +4,7 @@
 
 const LS_KEY = 'jw_l3_v1';
 const MB_KEY = 'jw_l3_mistakes_v1';   // 错题本（独立键，不随「清空本专题」被清掉）
+const PASS_KEY = 'jw_l3_pass_v1';     // 过关记录（独立键，按专题存，跨专题不清）
 let DATA = null;          // 题目库
 let curTopic = null;      // 当前专题（对象）
 let curTopicId = '';      // 当前专题 id（字符串）—— submitted 按它隔离
@@ -16,6 +17,50 @@ let t0 = 0;               // 进入时间戳
 let submitted = {};       // { topicId: { qKey: true } }  已点过「提交」的题 -> 只有这些题才判分（按专题隔离）
 let mistakeBook = {};     // { qKey: {addedAt, topic, step, group, qno, text, answer, myans, tries} }  长期错题本
 let redoOnly = false;     // 错题重做模式：只显示错题本里的题
+/* ---- 过关机制（家卫老师模式：一组一关）----
+   每个台阶备 5 组同构题。
+   第1组全对 → 该台阶过关，后续组自动收起（可手动展开加练）。
+   第1组有错 → 解锁第2组（同型换数据再试），还错再解锁第3组…直到第5组。
+   passed[topicId][stepNo] = 已通过的组序号（0=还没过，1..5=第几组过的） */
+let passed = {};          // { topicId: { stepNo: 组号 } }
+let passState = {};       // { topicId: { stepNo: { groupNo: true } } }  每组是否已全对
+
+function loadPassed(){
+  try{
+    const d = JSON.parse(localStorage.getItem(PASS_KEY) || '{}');
+    return (d && typeof d === 'object') ? d : {};
+  }catch(e){ return {}; }
+}
+function savePassed(){
+  try{ localStorage.setItem(PASS_KEY, JSON.stringify(passed)); }
+  catch(e){ if(!window.__passWarned){ window.__passWarned=1; toast('过关记录保存失败'); } }
+}
+function getPass(){
+  if(!passed[curTopicId]) passed[curTopicId] = {};
+  return passed[curTopicId];
+}
+function getPassState(){
+  if(!passState[curTopicId]) passState[curTopicId] = {};
+  return passState[curTopicId];
+}
+/** 该台阶当前应该显示到第几组（第1组默认可见；错了才解锁下一组） */
+function maxVisibleGroup(stepNo, stepGroups){
+  const ps = getPassState();
+  const st = ps[stepNo] || {};
+  for(let gi=1; gi<=stepGroups; gi++){
+    if(!st[gi]) return gi;      // 第一组没过 → 停在这组
+  }
+  return stepGroups;             // 全过
+}
+/** 组是否已全对 */
+function isGroupPassed(stepNo, groupNo){
+  const st = getPassState()[stepNo] || {};
+  return !!st[groupNo];
+}
+/** 台阶是否已过关（第1组通过即可） */
+function isStepPassed(stepNo){
+  return !!getPass()[stepNo];
+}
 
 /* ---------- 工具 ---------- */
 const $ = s => document.querySelector(s);
@@ -132,6 +177,7 @@ function saveState(){
       topic: curTopicId, idx: curQIdx, answers, submitted, mode, ts: Date.now()
     }));
     saveMistakeBook();
+    savePassed();
   }catch(e){
     // localStorage 满了 → 答案也存不下，只能提示
     if(!window.__lsWarned){ window.__lsWarned = 1; toast('浏览器存储已满，进度可能无法保存'); }
@@ -355,6 +401,8 @@ function openTopic(id){
   flat = flatten(t);
 
   mistakeBook = loadMistakeBook();
+  // 过关状态：全局 passed 载入 + 本专题的 passState 从 submitted 反推
+  passed = loadPassed();
   const st = loadState();
   // submitted 按专题隔离存, 切专题不清空
   if(st && st.submitted) submitted = st.submitted;
@@ -365,6 +413,8 @@ function openTopic(id){
   }else{
     answers = {}; strokes = {}; curQIdx = 0;
   }
+  // ★ 用已提交的答案反推：哪些组已经全对（刷新页面不丢过关进度）
+  rebuildPassState();
   mode = 'practice';
   t0 = Date.now();
   renderPractice();
@@ -384,6 +434,10 @@ function renderPractice(){
     const a = answers[f.key];
     return a && a.some(v => String(v||'').trim() !== '');
   }).length;
+  // 过关进度：已过关台阶数 / 总台阶数
+  const gp = getPass();
+  const stepTotal = curTopic.steps.length;
+  const stepPassed = curTopic.steps.filter(s => gp[s.no]).length;
 
   $('#screen').innerHTML = `
     <div class="qhead">
@@ -404,22 +458,110 @@ function renderPractice(){
         <button class="primary" onclick="finishPractice()">交卷看结果</button>
       </div>
       <div style="margin-top:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-        <span style="font-size:13.5px;color:#1e40af;font-weight:700">
-          已完成 ${answered} / ${flat.length} 题（${Math.round(answered/flat.length*100)}%）
+        <span style="font-size:13.5px;color:#b45309;font-weight:700">
+          🎯 已过关 ${stepPassed} / ${stepTotal} 个台阶
         </span>
         <span style="flex:1;min-width:100px;height:8px;background:#e2e8f0;border-radius:4px;overflow:hidden">
-          <i style="display:block;height:100%;width:${answered/flat.length*100}%;background:#16a34a;transition:width .3s"></i>
+          <i style="display:block;height:100%;width:${stepPassed/stepTotal*100}%;background:#f59e0b;transition:width .3s"></i>
         </span>
+        <span style="font-size:12.5px;color:#64748b">已填 ${answered} 题</span>
         <button onclick="confirmReset()" style="background:none;border:0;color:#94a3b8;font-size:12.5px;cursor:pointer;font-family:inherit;text-decoration:underline">清空本专题</button>
       </div>
     </div>
     <div id="qlist"></div>`;
 
-  $('#qlist').innerHTML = flat.map((f,i) => renderCard(f, i)).join('');
-  // 初始化所有画布
-  flat.forEach((f,i) => initPad(f, i));
+  $('#qlist').innerHTML = renderStepsHTML(t);
+  // 初始化所有画布（只初始化可见的，省性能）
+  flat.forEach((f,i) => { if(isQVisible(f)) initPad(f, i); });
   scrollToCur();
   updateProgress();
+}
+
+/** 题目是否当前可见（未被收起的组） */
+function isQVisible(f){
+  const stepNo = f.step.no, gno = f.group.no;
+  const total = f.step.groups ? f.step.groups.length : 5;
+  const vis = maxVisibleGroup(stepNo, total);
+  const gi = parseInt(gno, 10) || 1;
+  if(gi <= vis) return true;
+  // 已过关的台阶：后续组默认收起，但用户手动展开过就显示
+  const expanded = expandedGroups[`${curTopicId}|${stepNo}`] || {};
+  return !!expanded[gno];
+}
+
+/** 手动展开/收起某组 */
+let expandedGroups = {};
+function toggleGroup(stepNo, gno){
+  const k = `${curTopicId}|${stepNo}`;
+  expandedGroups[k] = expandedGroups[k] || {};
+  expandedGroups[k][gno] = !expandedGroups[k][gno];
+  rerenderList();
+}
+
+/** 重新渲染题目区（保持滚动位置） */
+function rerenderList(){
+  const y = window.scrollY;
+  const t = curTopic;
+  $('#qlist').innerHTML = renderStepsHTML(t);
+  flat.forEach((f,i) => { if(isQVisible(f)) initPad(f, i); });
+  window.scrollTo(0, y);
+  updateProgress();
+}
+
+/** 按「台阶 → 组」渲染，每组是一个过关单位 */
+function renderStepsHTML(t){
+  let out = '';
+  t.steps.forEach(s => {
+    const total = s.groups.length;
+    const vis = maxVisibleGroup(s.no, total);
+    const st = getPassState()[s.no] || {};
+    const passedGroups = Object.keys(st).filter(k=>st[k]).map(Number).sort((a,b)=>a-b);
+    const stepPass = isStepPassed(s.no);
+    // 本台阶「当前待做组」
+    let curG = 1;
+    for(let gi=1; gi<=total; gi++){ if(!st[gi]){ curG = gi; break; } curG = gi; }
+    const allPass = passedGroups.length === total;
+
+    out += `<div class="stepblk ${stepPass?'passed':''}" id="stepblk-${s.no}">
+      <div class="sbhead">
+        <span class="sbno">台阶 ${esc(s.no)}</span>
+        <span class="sbname">${esc(s.name)}</span>
+        <span class="sbpass ${allPass?'all':(stepPass?'ok':'')}">
+          ${allPass ? '🏆 全部过关' : (stepPass ? '✓ 已过关' : `未过关`)}
+        </span>
+      </div>
+      ${s.note ? `<div class="stepnote">
+        <div class="sn-row"><span class="sn-k">台阶小记</span><span class="sn-v">${esc(s.note)}</span></div>
+        ${s.demo ? `<div class="sn-row demo"><span class="sn-k">例题讲解</span><span class="sn-v">${esc(s.demo)}</span></div>` : ''}
+      </div>` : ''}
+      <div class="sbrule">过关规则：先做<b>第1组</b>，全对即过关，后面的组自动收起；做错了才解锁下一组</div>`;
+
+    s.groups.forEach(g => {
+      const gi = parseInt(g.no,10)||1;
+      const gp = !!st[g.no];
+      const isCur = (gi === curG) && !stepPass;
+      const visible = gi <= vis || ((expandedGroups[`${curTopicId}|${s.no}`]||{})[g.no]);
+      const locked = gi > vis && !visible;
+      const qIdx = flat.findIndex(x=>x.step.no===s.no && x.group.no===g.no);
+
+      out += `<div class="grpblk ${gp?'gpass':''} ${locked?'locked':''} ${isCur?'gcur':''}" id="grp-${s.no}-${g.no}">
+        <div class="ghead" ${locked?'':`onclick="toggleGroup('${s.no}','${g.no}')"`}>
+          <span class="gbadge">${gp?'✓':'第'+g.no+'组'}</span>
+          <span class="gstate">${locked?'🔒 未解锁（上一组做对才会出现）':(gp?'已过关':(isCur?'← 现在做这组':'点开做这组'))}</span>
+          ${locked?'':`<span class="gtoggle">${visible?'收起 ▲':'展开 ▼'}</span>`}
+        </div>
+        ${locked?'':`<div class="gbody">
+          ${g.questions.map(q=>{
+            const qi = flat.findIndex(x=>x.step.no===s.no && x.group.no===g.no && x.q.no===q.no);
+            return renderCard(flat[qi], qi);
+          }).join('')}
+        </div>`}
+      </div>`;
+    });
+
+    out += `</div>`;
+  });
+  return out;
 }
 
 /** 判分状态行：不用弹窗，直接在题目处显示 */
@@ -919,7 +1061,82 @@ function submitAns(key){
     if(mb){ mb.fixedAt = Date.now(); mb.fixed = true; saveMistakeBook(); refreshMistakeBtns(); }
     toast('✅ 答对了！');
   }
+
+  // ★ 过关判定：这一组是否全部答对
+  checkGroupPass(f);
   updateProgress();
+}
+
+/** 从已提交的答案反推过关状态（刷新/换设备后恢复） */
+function rebuildPassState(){
+  passState = {};
+  const t = curTopic;
+  if(!t) return;
+  const gp = getPass();
+  t.steps.forEach(s => {
+    const ps = {};
+    s.groups.forEach(g => {
+      const all = g.questions.every(q => {
+        const key = `${curTopicId}|${s.no}|${g.no}|${q.no}`;
+        if(!submitted[curTopicId]?.[key]) return false;
+        const a = answers[key] || [];
+        if(!a.some(v=>String(v||'').trim()!=='')) return false;
+        return judge(q, a).correct;
+      });
+      if(all) ps[g.no] = true;
+    });
+    if(Object.keys(ps).length) passState[curTopicId] = passState[curTopicId] || {};
+    passState[curTopicId] = passState[curTopicId] || {};
+    passState[curTopicId][s.no] = ps;
+    // 第1组全对 → 台阶过关
+    if(ps['1']) gp[s.no] = 1;
+    else {
+      const gns = Object.keys(ps).map(Number).sort((a,b)=>a-b);
+      if(gns.length) gp[s.no] = gns[gns.length-1];
+    }
+  });
+}
+
+/** 一组全部答对 → 该组过关；台阶过关则后续组收起 */
+function checkGroupPass(f){
+  const stepNo = f.step.no, gno = f.group.no;
+  const ps = getPassState();
+  ps[stepNo] = ps[stepNo] || {};
+  const grp = f.step.groups.find(g => g.no === gno);
+  if(!grp) return;
+
+  // 该组每题都必须已提交且答对
+  const all = grp.questions.every(q => {
+    const key = `${curTopicId}|${stepNo}|${gno}|${q.no}`;
+    if(!submitted[curTopicId]?.[key]) return false;
+    const a = answers[key] || [];
+    const j = judge(q, a);
+    return j.correct;
+  });
+  if(!all) return;
+
+  ps[stepNo][gno] = true;
+  const gp = getPass();
+  const total = f.step.groups.length;
+
+  if(gno === '1'){
+    // ★ 第1组全对 = 这个台阶过关！后面的组自动收起
+    gp[stepNo] = 1;
+    saveState();
+    rerenderList();
+    toast(`🎉 台阶${stepNo}「${f.step.name}」过关！后面几组已收起，不用做了`);
+    return;
+  }
+
+  // 第2组及以后也过了 → 记录最好成绩
+  if(!gp[stepNo] || parseInt(gno,10) > gp[stepNo]) gp[stepNo] = parseInt(gno,10);
+  saveState();
+  rerenderList();
+  if(parseInt(gno,10) < total){
+    toast(`✓ 第${gno}组也全对了，下一组已解锁`);
+  }else{
+    toast(`🏆 台阶${stepNo} 全部 5 组都做对了！`);
+  }
 }
 
 /** 手动加入/移出错题本 */
@@ -1132,24 +1349,50 @@ function renderResult(){
   else if(rate>=60){ lv='💪 及格，错题要复盘'; lvc='#ea580c'; }
   else { lv='📖 先把错题搞懂，别急着做新题'; lvc='#dc2626'; }
 
+  // ★ 台阶过关清单
+  const gp = getPass();
+  const ps = getPassState();
+  const stepRows = curTopic.steps.map(s => {
+    const psg = ps[s.no] || {};
+    const done = Object.keys(psg).filter(k=>psg[k]).map(Number).sort((a,b)=>a-b);
+    const ok = !!gp[s.no];
+    const all = done.length === s.groups.length;
+    const mark = all ? '🏆' : (ok ? '✓' : '○');
+    return `<tr class="${all?'all':(ok?'ok':'')}">
+      <td class="sn">${mark}</td>
+      <td>台阶${esc(s.no)} ${esc(s.name)}</td>
+      <td class="gs">${done.length ? `第${done.join('、')}组` : '未开始'}</td>
+      <td class="st">${all?'全部过关':(ok?'已过关':'未过关')}</td>
+    </tr>`;
+  }).join('');
+  const stepOk = curTopic.steps.filter(s => gp[s.no]).length;
+
   $('#screen').innerHTML = `
     <div class="score">
-      <div class="big">${right}<span> / ${judgeable}</span></div>
-      <div class="of">正确率 ${rate}% · 用时 ${Math.max(1,Math.round((Date.now()-t0)/60000))} 分钟</div>
+      <div class="big">${stepOk}<span> / ${curTopic.steps.length}</span></div>
+      <div class="of">台阶过关数 · 用时 ${Math.max(1,Math.round((Date.now()-t0)/60000))} 分钟</div>
       <div class="lv" style="background:${lvc}55">${lv}</div>
+    </div>
+
+    <div class="card">
+      <h3>🎯 过关清单（${stepOk}/${curTopic.steps.length} 个台阶过关）</h3>
+      <table class="passtable">
+        <thead><tr><th></th><th>台阶</th><th>已通过的组</th><th>状态</th></tr></thead>
+        <tbody>${stepRows}</tbody>
+      </table>
+      <div class="qnav" style="margin-top:14px">
+        <button onclick="backHome()">← 回到专题列表</button>
+        <button class="primary" onclick="redoTopic()">再做一遍</button>
+      </div>
     </div>
 
     <div class="card">
       <h3>📋 本次小结</h3>
       <div class="stats" style="margin:0">
-        <div class="stat"><b>${total}</b><span>总题数</span></div>
-        <div class="stat"><b style="color:#16a34a">${right}</b><span>做对</span></div>
+        <div class="stat"><b>${curTopic.steps.length}</b><span>台阶数</span></div>
+        <div class="stat"><b style="color:#16a34a">${stepOk}</b><span>已过关</span></div>
         <div class="stat"><b style="color:#dc2626">${wrong.length}</b><span>做错</span></div>
-        <div class="stat"><b>${rate}%</b><span>正确率</span></div>
-      </div>
-      <div class="qnav" style="margin-top:14px">
-        <button onclick="backHome()">← 回到专题列表</button>
-        <button class="primary" onclick="redoTopic()">再做一遍</button>
+        <div class="stat"><b>${rate}%</b><span>做题正确率</span></div>
       </div>
     </div>
 
