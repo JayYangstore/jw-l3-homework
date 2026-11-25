@@ -376,3 +376,19 @@ body{
 .passtable td.st{font-size:12.5px;color:#475569;font-weight:600}
 .passtable tr.ok td.st{color:#15803d}
 .passtable tr.all td.st{color:#b45309}
+
+/* ---------- 页面内确认条（不用 confirm 弹窗） ---------- */
+.confirmbar{
+  position:sticky;bottom:14px;margin:16px auto 0;max-width:560px;
+  display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  background:#1e293b;color:#fff;border-radius:12px;padding:12px 16px;
+  box-shadow:0 8px 26px rgba(15,23,42,.35);font-size:13.5px;z-index:60;
+}
+.confirmbar span{flex:1;min-width:180px}
+.confirmbar b{color:#fbbf24}
+.confirmbar button{
+  background:#f59e0b;color:#1f2937;border:0;border-radius:8px;padding:7px 16px;
+  font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;
+}
+.confirmbar button.ghost{background:rgba(255,255,255,.14);color:#e2e8f0}
+.confirmbar button:hover{filter:brightness(1.08)}
