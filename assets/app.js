@@ -464,13 +464,8 @@ function renderPractice(){
       <div>
         <span class="chip c-step">台阶 ${esc(cur.step.no)} · ${esc(cur.step.name)}</span>
         <span class="chip c-group">第 ${esc(cur.group.no)} 组</span>
-        <span class="chip c-idx" style="color:#334155;background:#e2e8f0">第 ${curQIdx+1} / ${flat.length} 题</span>
+        <span class="chip c-idx" style="color:#334155;background:#e2e8f0">第 ${esc(cur.group.no)} 组 / 共 ${cur.step.groups.length} 组</span>
       </div>
-      ${(cur.step.note||cur.step.demo) ? `
-      <div class="stepnote">
-        ${cur.step.note ? `<div class="sn-row"><span class="sn-k">台阶小记</span><span class="sn-v">${esc(cur.step.note)}</span></div>` : ''}
-        ${cur.step.demo ? `<div class="sn-row demo"><span class="sn-k">例题讲解</span><span class="sn-v">${esc(cur.step.demo)}</span></div>` : ''}
-      </div>` : ''}
       <div class="qnav">
         <button onclick="goQ(${curQIdx-1})" ${curQIdx===0?'disabled':''}>← 上一题</button>
         <button onclick="goQ(${curQIdx+1})" ${curQIdx===flat.length-1?'disabled':''}>下一题 →</button>
@@ -483,7 +478,7 @@ function renderPractice(){
         <span style="flex:1;min-width:100px;height:8px;background:#e2e8f0;border-radius:4px;overflow:hidden">
           <i style="display:block;height:100%;width:${stepPassed/stepTotal*100}%;background:#f59e0b;transition:width .3s"></i>
         </span>
-        <span style="font-size:12.5px;color:#64748b">已填 ${answered} 题</span>
+        <span style="font-size:12.5px;color:#64748b">${pendingQ()} 题待做</span>
         <button onclick="confirmReset()" style="background:none;border:0;color:#94a3b8;font-size:12.5px;cursor:pointer;font-family:inherit;text-decoration:underline">清空本专题</button>
       </div>
     </div>
@@ -1208,6 +1203,20 @@ function scrollToCur(){
   }, 60);
 }
 
+/** 当前该做的题数（可见题 = 每台阶第1组 + 已解锁组） */
+function pendingQ(){
+  if(!curTopic) return 0;
+  let n = 0;
+  curTopic.steps.forEach(s => {
+    s.groups.forEach(g => {
+      const gi = parseInt(g.no,10)||1;
+      const vis = maxVisibleGroup(String(s.no), s.groups.length);
+      const expanded = (expandedGroups[`${curTopicId}|${s.no}`]||{})[g.no];
+      if(gi <= vis || expanded) n += g.questions.length;
+    });
+  });
+  return n;
+}
 function updateProgress(){
   const answered = flat.filter(f => {
     const a = answers[f.key];
