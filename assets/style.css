@@ -308,3 +308,71 @@ body{
 }
 .fbtn:hover{border-color:#94a3b8;color:#1e293b}
 .fbtn.on{background:#1e40af;border-color:#1e40af;color:#fff;box-shadow:0 1px 4px rgba(30,64,175,.25)}
+
+/* ========== 过关模式（家卫老师：一组一关） ========== */
+.stepblk{
+  margin:0 0 20px;background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:0 0 14px;
+  overflow:hidden;
+}
+.stepblk.passed{border-color:#86efac;box-shadow:0 1px 6px rgba(22,163,74,.10)}
+.sbhead{
+  display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  background:#f1f5f9;padding:11px 15px;border-bottom:1px solid #e2e8f0;
+}
+.stepblk.passed .sbhead{background:#f0fdf4;border-bottom-color:#bbf7d0}
+.sbno{
+  background:#334155;color:#fff;font-size:12px;font-weight:700;padding:2px 10px;border-radius:6px;
+}
+.stepblk.passed .sbno{background:#16a34a}
+.sbname{font-size:15px;font-weight:700;color:#1e293b;flex:1;min-width:140px}
+.sbpass{
+  font-size:12px;font-weight:700;padding:2px 10px;border-radius:10px;
+  background:#e2e8f0;color:#64748b;
+}
+.sbpass.ok{background:#dcfce7;color:#15803d}
+.sbpass.all{background:#fef3c7;color:#b45309}
+
+.sbrule{
+  font-size:12px;color:#92400e;background:#fffbeb;padding:7px 15px;
+  border-bottom:1px solid #fde68a;
+}
+.sbrule b{color:#b45309}
+
+/* 组块 */
+.grpblk{margin:12px 15px 0;border:1px solid #e2e8f0;border-radius:11px;overflow:hidden;background:#fff}
+.grpblk.gcur{border-color:#f59e0b;box-shadow:0 0 0 3px rgba(245,158,11,.13)}
+.grpblk.gpass{border-color:#86efac;background:#f7fff9}
+.grpblk.locked{background:#f8fafc;border-style:dashed;opacity:.85}
+.ghead{
+  display:flex;align-items:center;gap:10px;padding:9px 13px;cursor:pointer;
+  background:#f8fafc;border-bottom:1px solid #eef2f6;user-select:none;
+}
+.grpblk.gcur .ghead{background:#fffbeb;border-bottom-color:#fde68a}
+.grpblk.gpass .ghead{background:#f0fdf4;border-bottom-color:#dcfce7}
+.grpblk.locked .ghead{cursor:default;background:#f1f5f9}
+.gbadge{
+  font-size:12px;font-weight:700;padding:2px 9px;border-radius:6px;
+  background:#e2e8f0;color:#475569;
+}
+.grpblk.gcur .gbadge{background:#f59e0b;color:#fff}
+.grpblk.gpass .gbadge{background:#16a34a;color:#fff}
+.gstate{font-size:12.5px;color:#64748b;flex:1}
+.grpblk.gcur .gstate{color:#b45309;font-weight:600}
+.grpblk.gpass .gstate{color:#15803d;font-weight:600}
+.gtoggle{font-size:12px;color:#94a3b8}
+.gbody{padding:10px 4px 2px}
+
+/* 过关清单表格 */
+.passtable{width:100%;border-collapse:collapse;font-size:13.5px}
+.passtable th{
+  text-align:left;font-size:12px;color:#64748b;font-weight:600;
+  padding:6px 9px;border-bottom:1px solid #e2e8f0;
+}
+.passtable td{padding:8px 9px;border-bottom:1px solid #f1f5f9}
+.passtable tr.ok{background:#f0fdf4}
+.passtable tr.all{background:#fffbeb}
+.passtable td.sn{font-size:15px;width:26px;text-align:center}
+.passtable td.gs{color:#64748b;font-size:12.5px}
+.passtable td.st{font-size:12.5px;color:#475569;font-weight:600}
+.passtable tr.ok td.st{color:#15803d}
+.passtable tr.all td.st{color:#b45309}
