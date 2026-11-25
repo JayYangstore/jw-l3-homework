@@ -1367,7 +1367,7 @@ function renderResult(){
       return;
     }
     // 只有填满所有空的题才参与判分（没填完 = 没做，不算错）
-    const unfilled = blanks.filter((b,k)=>String(a[k]||'').trim()==='').length;
+    const unfilled = q.blanks.filter((b,k)=>String(a[k]||'').trim()==='').length;
     if(unfilled) return;    // 没做完的题不计入正确率、也不进错题本
     const j = judge(q, a);
     judgeable++;
