@@ -399,3 +399,27 @@ body{
 .grpblk.locked .gstate{color:#94a3b8;font-style:italic}
 .grpblk.gcur .ghead{box-shadow:inset 3px 0 0 #f59e0b}
 .grpblk.gpass .ghead{box-shadow:inset 3px 0 0 #16a34a}
+
+/* ===== 侧边菜单首页 ===== */
+.home{display:flex;gap:14px;align-items:flex-start}
+.home-side{flex:0 0 248px;position:sticky;top:0;background:#fff;border:1px solid var(--border);border-radius:13px;padding:12px;max-height:calc(100vh - 120px);overflow-y:auto}
+.home-side .side-brand{font-size:14px;font-weight:800;color:#1e3a8a;padding:2px 6px 10px;border-bottom:1px solid var(--border);margin-bottom:8px}
+.home-side .side-grp{font-size:11px;color:#64748b;letter-spacing:1px;padding:8px 6px 4px;font-weight:700}
+.home-side .side-item{display:flex;align-items:center;gap:8px;width:100%;text-align:left;border:none;background:transparent;border-radius:9px;padding:9px 9px;font-size:13px;font-family:inherit;color:#1e293b;cursor:pointer}
+.home-side .side-item:hover{background:#f1f5f9}
+.home-side .side-item .pct{margin-left:auto;font-size:11px;color:#64748b}
+.home-side .side-item.tb{border-left:3px solid #2563eb}
+.home-side .side-item.think{border-left:3px solid #8b5cf6}
+.home-side .mb-mini{margin-top:10px;border-top:1px solid var(--border);padding:10px 6px 2px;font-size:13px;cursor:pointer;color:#b45309;font-weight:700;display:flex;align-items:center;gap:7px}
+.home-main{flex:1;min-width:0}
+.home-main .welcome{background:linear-gradient(135deg,#1e3a8a,#2563eb);color:#fff;border-radius:13px;padding:22px 20px}
+.home-main .welcome h2{margin:0 0 6px;font-size:19px}
+.home-main .welcome p{margin:0;font-size:13px;opacity:.92}
+@media (max-width:760px){
+  .home{flex-direction:column}
+  .home-side{flex:none;width:100%;position:static;max-height:none;display:flex;flex-wrap:wrap;gap:2px;padding:9px}
+  .home-side .side-brand,.home-side .side-grp{display:none}
+  .home-side .side-item{width:auto;font-size:12px;padding:6px 9px;border-left:none!important}
+  .home-side .side-item .pct{display:none}
+  .home-side .mb-mini{display:none}
+}
