@@ -321,58 +321,41 @@ function flatten(topic){
 /* ---------- 渲染：起始页 ---------- */
 function renderHome(){
   mode = 'view';
-  mistakeBook = loadMistakeBook();   // ★ 首页也要能看到错题本数量
-  // 首页不显示进度条和返回按钮
+  mistakeBook = loadMistakeBook();
   const tp = document.getElementById('topprog'); if(tp) tp.style.display='none';
   const pt = document.getElementById('progtxt'); if(pt) pt.textContent='';
   const bb = document.getElementById('backbtn'); if(bb) bb.style.display='none';
+  const st = loadState();
+  const tb = DATA.topics.filter(t=>t.kind==='textbook');
+  const th = DATA.topics.filter(t=>t.kind!=='textbook');
+  const item = t => {
+    const done = st && st.topic === t.id;
+    const pct = done ? Math.round(Object.keys(st.answers||{}).filter(k=>k.startsWith(t.id+'|') && (st.answers[k]||[]).some(v=>String(v).trim()!=='')).length / t.stats.questions * 100) : 0;
+    return `<button class="side-item ${t.kind==='textbook'?'tb':'think'}" onclick="openTopic('${t.id}')">
+      <span>${esc(t.name)}</span>${pct>0?`<span class="pct">${pct}%</span>`:''}</button>`;
+  };
   $('#screen').innerHTML = `
-    <div class="hero">
-      <h2>小学数学 · 在线作业</h2>
-      <div class="sub">${DATA.topics.length} 个专题 · ${DATA.stats.totalQuestions} 道题 · 不用打印，做完自动判分</div>
-      <div class="sysnote">
-        <span class="sn-b">🧠 思维专题</span>家卫老师方法论（代换/整体/有序…）奥数能力线
-        <span class="sn-b tb">📘 课内专题</span>人教版教材知识点，同一个「铺台阶」方法做课内过关
+    <div class="home">
+      <aside class="home-side">
+        <div class="side-brand">📚 专题</div>
+        <div class="side-grp">📘 课内专题</div>
+        ${tb.map(item).join('')}
+        <div class="side-grp">🧠 思维专题</div>
+        ${th.map(item).join('')}
+        <div class="mb-mini" onclick="openMistakeBook()">📕 错题本 ${mistakeCount()} 题</div>
+      </aside>
+      <div class="home-main">
+        <div class="welcome">
+          <h2>选一个专题开始</h2>
+          <p>${DATA.topics.length} 个专题 · ${DATA.stats.totalQuestions} 道题 · 做完自动判分，错题自动收进错题本</p>
+        </div>
+        <div class="mbentry" onclick="openMistakeBook()">
+          <span class="mbicon">📕</span>
+          <span class="mbtxt">错题本<b>${mistakeCount()} 题</b></span>
+          <span class="mbgo">打开 →</span>
+        </div>
       </div>
-
-      <details class="howto" id="howtoBox">
-        <summary>📌 第一次用？点这里看操作说明</summary>
-        <ol>
-          <li>选一个专题 → 点「开始做」</li>
-          <li>在每题的<b>草稿区</b>写推导过程（iPad 用 Apple Pencil，手指也行）</li>
-          <li>写错了可以<b>🩹 橡皮</b>擦掉、<b>↩ 撤销</b>回退一步、<b>↪ 重做</b>找回</li>
-          <li>在<b>答案框</b>填最终答案 → 点<b>「提交答案」</b>才判对错</li>
-          <li>判错的题<b>自动进错题本</b>，首页点「错题本」随时回来重做</li>
-          <li>多空题按题目里空格的顺序填，比如「长13厘米,宽7厘米」就填 13 和 7</li>
-          <li>进度自动保存，下次接着做</li>
-        </ol>
-      </details>
-
-      <div class="pills">
-        <span class="pill">${DATA.stats.totalQuestions} 道题</span>
-        <span class="pill">${DATA.topics.length} 个专题</span>
-        <span class="pill">${DATA.stats.multiBlank} 道多空题</span>
-        <span class="pill">${DATA.stats.totalSteps} 个台阶</span>
-      </div>
-
-      <div class="mbentry" onclick="openMistakeBook()">
-        <span class="mbicon">📕</span>
-        <span class="mbtxt">错题本<b>${mistakeCount()} 题</b> · 之前做错的题，随时回来重做</span>
-        <span class="mbgo">打开 →</span>
-      </div>
-
-      <div class="listhead">
-        <span>📚 选择专题</span>
-        <input class="tsrch" id="tsearch" placeholder="🔍 搜索..." oninput="filterTopics(this.value)">
-      </div>
-      <div class="filtbar">
-        <button class="fbtn ${_filter==='all'?'on':''}" data-f="all" onclick="setFilter('all')">全部 ${DATA.topics.length}</button>
-        <button class="fbtn ${_filter==='textbook'?'on':''}" data-f="textbook" onclick="setFilter('textbook')">📘 课内 ${DATA.topics.filter(t=>t.kind==='textbook').length}</button>
-        <button class="fbtn ${_filter==='think'?'on':''}" data-f="think" onclick="setFilter('think')">🧠 思维 ${DATA.topics.filter(t=>t.kind!=='textbook').length}</button>
-      </div>
-      <div class="tgrid" id="tgrid"></div>
     </div>`;
-  renderTopicCards('');
 }
 
 function filterTopics(q){
